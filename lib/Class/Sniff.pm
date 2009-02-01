@@ -586,6 +586,39 @@ sub _build_paths {
     }
 }
 
+=head1 CAVEATS AND PLANS
+
+=over 4
+
+=item * Circular Inheritance
+
+Currently, any circular inheritances causes a 'Deep recursion' failure, so
+don't do that.
+
+=item * Package Variables
+
+User-defined package variables in OO code are a code smell, but with versions
+of Perl < 5.10, any subroutine also creates a scalar glob entry of the same
+name, so I've no done a package variable check yet.  This will happen in the
+future (there will be exceptions, such as with @ISA).
+
+=item * C3 Support
+
+I'd like support for alternate method resolution orders.  If your classes use
+C3, you may get erroneous results.  See L<paths> for a workaround.
+
+=item * Exporting
+
+Many packages (such as L<Data::Dumper>) export functions by default and these
+show up as methods.  We'll detect those later.
+
+=item * Duplicate Methods
+
+It's rather common for someone to cut-n-paste a method from one class to
+another.  We'll try and detect that, too.  L<Sub::Information> may help there.
+
+=back
+
 =head1 AUTHOR
 
 Curtis "Ovid" Poe, C<< <ovid at cpan.org> >>
