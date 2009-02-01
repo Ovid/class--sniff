@@ -7,3 +7,5 @@ t/00-load.t
 t/basic.t
 xt/pod-coverage.t
 xt/pod.t
+Makefile.PL
+META.yml
