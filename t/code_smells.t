@@ -107,6 +107,33 @@ eq_or_diff [$complex_sniff->multiple_inheritance],
     [qw/One Three/],
     '... in the order their found in the hierarchy';
 
+{
+    package Platypus;
+    our @ISA = qw<SpareParts Duck>;
+    package Duck;
+    our @ISA = 'SpareParts';
+    sub quack {}
+    package SpareParts;
+    our @ISA = 'Animal';
+    sub quack {}
+    package Animal;
+}
+
+#         Animal
+#           |
+#      SpareParts
+#       |    |   
+#       |   Duck 
+#       |    |   
+#      Platypus
+
+my $platypus = Class::Sniff->new({
+    class     => 'Platypus',
+    universal => 1,
+});
+eq_or_diff [$platypus->unreachable], ['Duck::quack'],
+    'Unbalanced inheritance graphs are parsed properly';
+
 # Circular inheritance really breaks things!
 #{
 #    package Un;
