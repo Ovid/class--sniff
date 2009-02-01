@@ -1,5 +1,9 @@
 Revision history for Class-Sniff
 
+0.03    01/02/2008
+        Added 'multiple_inheritance' method.
+        Added support for including the "UNIVERSAL" class.
+
 0.02    01/02/2008
         Added documentation.
         Made the 'unreachable' return more sane.

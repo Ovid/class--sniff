@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most tests => 29;
+use Test::Most tests => 31;
 use Class::Sniff;
 
 {
@@ -113,3 +113,13 @@ throws_ok { $sniff->methods('Child1') }
 throws_ok { $sniff->methods('Abstract') }
     qr/No such class/,
     '... as are all parents of those classes';
+
+# Let them include UNIVERSAL
+
+ok $sniff = Class::Sniff->new({ class => 'Grandchild', universal => 1 }),
+    'Asking for the UNIVERSAL class should succeed';
+
+eq_or_diff [ $sniff->classes ],
+  [ qw/Grandchild Child1 Abstract UNIVERSAL Child2/ ],
+  '... and it should be returned when we ask for classes';
+

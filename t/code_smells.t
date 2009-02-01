@@ -99,3 +99,23 @@ my $expected_unreachable = [
 
 eq_or_diff [sort $sniff->unreachable], $expected_unreachable,
   '... and it should return an HoA with unreachable methods and the classes';
+
+can_ok $sniff, 'multiple_inheritance';
+eq_or_diff [$sniff->multiple_inheritance], ['Grandchild'],
+    '... and it should return classes with more than one parent';
+eq_or_diff [$complex_sniff->multiple_inheritance],
+    [qw/One Three/],
+    '... in the order their found in the hierarchy';
+
+# Circular inheritance really breaks things!
+#{
+#    package Un;
+#    our @ISA = 'Deux';
+#    package Deux;
+#    our @ISA = 'Trois';
+#    package Trois;
+#    our @ISA = 'Un';
+#}
+#
+#my $usniff = Class::Sniff->new({class => 'Un'});
+#explain $usniff->to_string;
