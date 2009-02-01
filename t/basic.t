@@ -31,6 +31,8 @@ use Class::Sniff;
     sub quux { }   # no inheritance
 }
 
+# Constructor with tree, graph, and ascii representations.
+
 can_ok 'Class::Sniff', 'new';
 $DB::single = 1;
 isa_ok my $sniff = Class::Sniff->new({ class => 'Grandchild'}), 'Class::Sniff',
@@ -42,9 +44,16 @@ isa_ok $sniff->tree, 'Tree', '... and the object it returns';
 can_ok $sniff, 'graph';
 isa_ok $sniff->graph, 'Graph::Easy', '... and the object it returns';
 
+can_ok $sniff, 'to_string';
+like $sniff->to_string, qr/\| \s+ Grandchild \s+ \|/x,
+    '... and it should look sane';
+
+# Fetch general data about object hierarchy
+
 can_ok $sniff, 'classes';
 is scalar $sniff->classes, 4,
   '... and in scalar context, should return the number of classes';
+
 eq_or_diff [ $sniff->classes ],
   [ qw/Grandchild Child1 Abstract Child2/ ],
   '... and it should return the classes in default inheritance order';
@@ -85,9 +94,9 @@ throws_ok { $sniff->methods('no_such_class') }
     qr/No such class/,
     '... and it should croak if passed an unknown class';
 
-can_ok $sniff, 'to_string';
-like $sniff->to_string, qr/\| \s+ Grandchild \s+ \|/x,
-    '... and it should look sane';
+# ignore allows us to ignore classes matching a pattern
+# This is useful if you inherit from a framework such as DBIx::Class and you
+# don't want that showing up.
 
 can_ok $sniff, 'ignore';
 $sniff = Class::Sniff->new( { class => 'Grandchild', ignore => qr/Abstract/ } );

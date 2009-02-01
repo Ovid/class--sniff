@@ -34,6 +34,9 @@ use Class::Sniff;
 can_ok 'Class::Sniff', 'new';
 my $sniff = Class::Sniff->new( { class => 'Grandchild' } );
 
+# Multiple search paths through a hierarchy are a smell because it implies MI
+# and possibly unreachable methods.
+
 can_ok $sniff, 'paths';
 my $expected_paths = [
     [ 'Grandchild', 'Child1', 'Abstract' ],
@@ -72,6 +75,10 @@ $expected_paths = [
 eq_or_diff [$complex_sniff->paths], $expected_paths,
     '... even for convoluted hierarchies';
 
+# overridden methods aren't really a smell, but a programmer can compare the
+# classes they're overridden in (listed in search order) against the paths to
+# understand why something can't be reached.
+
 can_ok $sniff, 'overridden';
 my $expected_overridden = {
     'bar' => [ 'Grandchild', 'Abstract', 'Child2' ],
@@ -80,6 +87,10 @@ my $expected_overridden = {
 eq_or_diff $sniff->overridden, $expected_overridden,
   '... and it should return an HoA with overridden methods and the classes';
 
+# 'unreachable' methods can be called directly, but this lists the classes
+# overridden methods are listed in which won't allow them to be called.
+# We don't account for AUTOLOAD.
+
 can_ok $sniff, 'unreachable';
 my $expected_unreachable = {
     'bar' => [ 'Child2' ],
@@ -87,5 +98,3 @@ my $expected_unreachable = {
 };
 eq_or_diff $sniff->unreachable, $expected_unreachable,
   '... and it should return an HoA with unreachable methods and the classes';
-
-# also test for MI
