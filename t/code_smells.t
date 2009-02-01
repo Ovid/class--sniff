@@ -92,9 +92,10 @@ eq_or_diff $sniff->overridden, $expected_overridden,
 # We don't account for AUTOLOAD.
 
 can_ok $sniff, 'unreachable';
-my $expected_unreachable = {
-    'bar' => [ 'Child2' ],
-    'foo' => [ 'Child2' ]
-};
-eq_or_diff $sniff->unreachable, $expected_unreachable,
+my $expected_unreachable = [
+    'Child2::bar',
+    'Child2::foo',
+];
+
+eq_or_diff [sort $sniff->unreachable], $expected_unreachable,
   '... and it should return an HoA with unreachable methods and the classes';

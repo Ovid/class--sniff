@@ -13,6 +13,13 @@ use Devel::Symdump;
 
 Class::Sniff - Look for class composition code smells
 
+ my $sniff = Class::Sniff->new({class => 'My::Class'});
+ print $sniff->to_string;
+ my @unreachable = $sniff->unreachable;
+ foreach my $method (@unreachable) {
+    print "$method\n";
+ }
+
 =head1 VERSION
 
 Version 0.01
@@ -120,7 +127,6 @@ sub unreachable {
     my @paths      = $self->paths;
     my %unreachable;
 
-    $DB::single = 1;
     while ( my ( $method, $classes ) = each %$overridden ) {
         my @unreachable;
 
@@ -146,7 +152,13 @@ sub unreachable {
             $unreachable{$method} = \@unreachable;
         }
     }
-    return \%unreachable;
+    my @unreachable;
+    while ( my ($method, $classes) = each %unreachable ) {
+        foreach my $class (@$classes) {
+            push @unreachable => "$class\::$method";
+        }
+    }
+    return @unreachable;
 }
 
 sub _add_relationships {
