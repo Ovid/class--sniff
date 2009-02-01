@@ -1,0 +1,9 @@
+Build.PL
+Changes
+lib/Class/Sniff.pm
+MANIFEST
+README
+t/00-load.t
+t/basic.t
+xt/pod-coverage.t
+xt/pod.t
