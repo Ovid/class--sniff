@@ -1,5 +1,9 @@
 Revision history for Class-Sniff
 
-0.01    Date/time
+0.02    01/02/2008
+        Added documentation.
+        Made the 'unreachable' return more sane.
+
+0.01    01/02/2008
         First version, released on an unsuspecting world.
 

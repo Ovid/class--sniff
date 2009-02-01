@@ -13,26 +13,69 @@ use Devel::Symdump;
 
 Class::Sniff - Look for class composition code smells
 
- my $sniff = Class::Sniff->new({class => 'My::Class'});
- print $sniff->to_string;
- my @unreachable = $sniff->unreachable;
- foreach my $method (@unreachable) {
-    print "$method\n";
- }
-
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
-    use Class::Sniff;
+ use Class::Sniff;
+ my $sniff = Class::Sniff->new({class => 'Some::class'});
 
-    my $sniff = Class::Sniff->new('Some::Class');
+ my $num_methods = $sniff->methods;
+ my $num_classes = $sniff->classes;
+ my @methods     = $sniff->methods;
+ my @classes     = $sniff->classes;
+
+ my $graph    = $sniff->graph;   # Graph::Easy
+ my $graphviz = $graph->as_graphviz();
+ open my $DOT, '|dot -Tpng -o graph.png' or die("Cannot open pipe to dot: $!");
+ print $DOT $graphviz;
+
+ print $sniff->to_string;
+ my @unreachable = $sniff->unreachable;
+ foreach my $method (@unreachable) {
+     print "$method\n";
+ }
+
+=head1 DESCRIPTION
+
+B<ALPHA> code.  You've been warned.
+
+This module attempts to help programmers find 'code smells' in the
+object-oriented code.  If it reports something, it does not mean that your
+code is wrong.  It just means that you might want to look at your code a
+little bit more closely to see if you have any problems.
+
+At the present time, we assume Perl's default left-most, depth-first search
+order.  We may alter this in the future (and there's a work-around with the
+C<paths> method.  More on this later).
+
+=head1 CLASS METHODS
+
+=head2 C<new>
+
+ my $sniff = Class::Sniff->new({
+    class  => 'My::Class',
+    ignore => qr/^DBIx::Class/,
+ });
+
+The constructor accepts a hashref with one mandatory parameter, the class
+name.  If the class is not loaded into memory, the constructor will still
+work, but nothing will get reported.  You must ensure that your classes is
+already loaded!
+
+An optional C<ignore> parameter should be a regex telling C<Class::Sniff>
+what to ignore in class names.  This is useful if you're inheriting from a
+large framework and don't want to report on it.  Be careful with this, though.
+If you have a complicated inheritance hierarchy and you try to ignore
+something other than the root, you will likely get bad information returned.
+
+We do not include the C<UNIVERSAL> class.  This may change in the future.
 
 =cut
 
@@ -60,7 +103,7 @@ sub new {
 
 sub _initialize {
     my $self = shift;
-    my $target_class = $self->target;
+    my $target_class = $self->target_class;
     $self->_add_class($target_class);
     $self->{classes}{$target_class}{count} = 1;
     $self->{tree} = Tree->new($target_class);
@@ -112,6 +155,25 @@ sub _add_class {
     return $self;
 }
 
+=head1 INSTANCE METHODS
+
+=head2 C<overridden>
+
+ my $overridden = $sniff->overridden;
+
+This method returns a hash of arrays.  Each key is a method in the hierarchy
+which has been overridden and the arrays are lists of all classes the method
+is defined in (not just which one's it's overridden in).  The order of the
+classes is in Perl's default inheritance search order.
+
+=head3 Code Smell
+
+Overridden methods are not necessarily a code smell, but you should check them
+to find out if you've overridden something you didn't expect to override.
+Accidental overriding of a method can be very hard to debug.
+
+=cut
+
 sub overridden {
     my $self = shift;
     my %methods;
@@ -120,6 +182,26 @@ sub overridden {
     }
     return \%methods;
 }
+
+=head2 C<unreachable>
+
+ my @unreachable = $sniff->unreachable;
+ for my $method (@unreachable) {
+     print "Cannot reach '$method'\n";
+ }
+
+Returns a list of fully qualified method names (e.g.,
+'My::Customer::_short_change') which are unreachable by Perl's normal search
+inheritance search order.  It does this by searching the "paths" returned by
+the C<paths> method.
+
+=head3 Code Smell
+
+Pretty straight-forward here.  If a method is unreachable, it's likely to be
+dead code.  However, you might have a reason for this and maybe you're calling
+it directly.
+
+=cut
 
 sub unreachable {
     my $self       = shift;
@@ -161,6 +243,65 @@ sub unreachable {
     return @unreachable;
 }
 
+=head2 C<paths>
+
+ my @paths = $sniff->paths;
+
+ for my $i (0 .. $#paths) {
+     my $path = join ' -> ' => @{ $paths[$i] };
+     printf "Path #%d is ($path)\n" => $i + 1;
+ }
+
+Returns a list of array references.  Each array reference is a list of
+classnames representing the path Perl will take to search for a method.  For
+example, if we have an abstract C<Animal> class and we use diamond inheritance
+to create an C<Animal::Platypus> class, we might have the following hierarchy:
+
+               Animal
+              /      \
+    Animal::Duck   Animal::SpareParts
+              \      /
+          Animal::Platypus
+
+With Perl's normal left-most, depth-first search order, C<paths> will return:
+
+ (
+     ['Animal::Platypus', 'Animal::Duck',       'Animal'],
+     ['Animal::Platypus', 'Animal::SpareParts', 'Animal'],
+ )
+
+If you are using a different MRO (Method Resolution Order) and you know your
+search order is different, you can pass in a list of "correct" paths,
+structured as above:
+
+ # Look ma, one hand (er, path)!
+ $sniff->paths( 
+     ['Animal::Platypus', 'Animal::Duck', 'Animal::SpareParts', 'Animal'],
+ );
+
+At the present time, we do I<no> validation of what's passed in.  It's just an
+experimental (and untested) hack.
+
+=head3 Code Smell
+
+Multiple inheritance paths are tricky to get right, make it easy to have
+'unreachable' methods and have a greater cognitive load on the programmer.
+For example, if C<Animal::Duck> and C<Animal::SpareParts> both define the same
+method, C<Animal::SpareParts>' method is likely unreachable.  But what if
+makes a required state change?  You now have broken code.
+
+See L<http://use.perl.org/~Ovid/journal/38373> for a more in-depth
+explanation.
+
+=cut
+
+sub paths       { 
+    my $self = shift;
+    return @{ $self->{paths} } unless @_;
+    $self->{paths} = [@_];
+    return $self;
+}
+
 sub _add_relationships {
     my ( $self, $class, @parents ) = @_;
     $self->_add_class($_) foreach $class, @parents;
@@ -179,45 +320,161 @@ sub _add_child {
         push @$children => $child;
     }
 }
-sub to_string   { $_[0]->graph->as_ascii }
-sub tree        { $_[0]->{tree} }
-sub graph       { $_[0]->{graph} }
-sub target      { $_[0]->{target} }
-sub num_classes { $_[0]->{num_classes} }
-sub classes     { @{ $_[0]->{list_classes} } }
-sub ignore      { $_[0]->{ignore} }
-sub paths       { 
-    my $self = shift;
-    return @{ $self->{paths} } unless @_;
-    $self->{paths} = [@_];
-    return $self;
-}
+
+=head2 C<to_string>
+
+ print $sniff->to_string;
+
+For debugging, lets you print a string representation of your class hierarchy.
+Internally this is created by C<Graph::Easy> and I can't figure out how to
+force it to respect the order in which classes are ordered.  Thus, the
+'left/right' ordering may be incorrect.
+
+=cut
+
+sub to_string    { $_[0]->graph->as_ascii }
+
+=head2 C<tree>
+
+ my $tree = $sniff->tree;
+
+Returns a L<Tree> representation of the inheritance hierarchy.
+
+=cut
+
+sub tree         { $_[0]->{tree} }
+
+=head2 C<graph>
+
+ my $graph = $sniff->graph;
+
+Returns a C<Graph::Easy> representation of the inheritance hierarchy.  This is
+exceptionally useful if you have C<GraphViz> installed.
+
+ my $graph    = $sniff->graph;   # Graph::Easy
+ my $graphviz = $graph->as_graphviz();
+ open my $DOT, '|dot -Tpng -o graph.png' or die("Cannot open pipe to dot: $!");
+ print $DOT $graphviz;
+
+Visual representations of complex hierarchies are worth their weight in gold.
+See L<http://pics.livejournal.com/publius_ovidius/pic/00015p9z>.
+
+Because I cannot figure force it to respect the 'left/right' ordering of
+classes, you may need to manually edit the C<$graphviz> data to get this
+right.
+
+=cut
+
+sub graph        { $_[0]->{graph} }
+
+=head2 C<target_class>
+
+ my $class = $sniff->target_class;
+
+This is the class you originally asked to sniff.
+
+=cut
+
+sub target_class { $_[0]->{target} }
+
+=head2 C<ignore>
+
+ my $ignore = $sniff->ignore;
+
+This is the regex provided (if any) to the constructor's C<ignore> parameter.
+
+=cut
+
+sub ignore       { $_[0]->{ignore} }
+
+=head2 C<classes>
+
+ my $num_classes = $sniff->classes;
+ my @classes     = $sniff->classes;
+
+In scalar context, lists the number of classes in the hierarchy.
+
+In list context, lists the classes in the hierarchy, in default search order.
+
+=cut
+
+sub classes      { @{ $_[0]->{list_classes} } }
+
+=head2 C<parents>
+
+ # defaults to 'target_class'
+ my $num_parents = $sniff->parents;
+ my @parents     = $sniff->parents;
+
+ my $num_parents = $sniff->parents('Some::Class');
+ my @parents     = $sniff->parents('Some::Class');
+
+In scalar context, lists the number of parents a class has.
+
+In list context, lists the parents a class has.
+
+=head3 Code Smell
+
+If a class has more than one parent, you may have unreachable or conflicting
+methods.
+
+=cut
 
 sub parents {
-    my ( $self, $target ) = @_;
-    $target ||= $self->target;
-    unless ( exists $self->{classes}{$target} ) {
-        croak "No such class '$target' found in hierarchy";
+    my ( $self, $class ) = @_;
+    $class ||= $self->target_class;
+    unless ( exists $self->{classes}{$class} ) {
+        croak "No such class '$class' found in hierarchy";
     }
-    return @{ $self->{classes}{$target}{parents} };
+    return @{ $self->{classes}{$class}{parents} };
 }
+
+=head2 C<children>
+
+ # defaults to 'target_class'
+ my $num_children = $sniff->children;
+ my @children     = $sniff->children;
+
+ my $num_children = $sniff->children('Some::Class');
+ my @children     = $sniff->children('Some::Class');
+
+In scalar context, lists the number of children a class has.
+
+In list context, lists the children a class has.
+
+=cut
 
 sub children {
-    my ( $self, $target ) = @_;
-    $target ||= $self->target;
-    unless ( exists $self->{classes}{$target} ) {
-        croak "No such class '$target' found in hierarchy";
+    my ( $self, $class ) = @_;
+    $class ||= $self->target_class;
+    unless ( exists $self->{classes}{$class} ) {
+        croak "No such class '$class' found in hierarchy";
     }
-    return @{ $self->{classes}{$target}{children} };
+    return @{ $self->{classes}{$class}{children} };
 }
 
+=head2 C<methods>
+
+ # defaults to 'target_class'
+ my $num_methods = $sniff->methods;
+ my @methods     = $sniff->methods;
+
+ my $num_methods = $sniff->methods('Some::Class');
+ my @methods     = $sniff->methods('Some::Class');
+
+In scalar context, lists the number of methods a class has.
+
+In list context, lists the methods a class has.
+
+=cut
+
 sub methods {
-    my ( $self, $target ) = @_;
-    $target ||= $self->target;
-    unless ( exists $self->{classes}{$target} ) {
-        croak "No such class '$target' found in hierarchy";
+    my ( $self, $class ) = @_;
+    $class ||= $self->target_class;
+    unless ( exists $self->{classes}{$class} ) {
+        croak "No such class '$class' found in hierarchy";
     }
-    return @{ $self->{classes}{$target}{methods} };
+    return @{ $self->{classes}{$class}{methods} };
 }
 
 sub _get_parents {
