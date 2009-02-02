@@ -3,8 +3,10 @@ package Class::Sniff;
 use warnings;
 use strict;
 
+use B::Concise;
 use Carp ();
 use Devel::Symdump;
+use Digest::MD5;
 use Graph::Easy;
 use List::MoreUtils ();
 use Sub::Information ();
@@ -17,11 +19,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 SYNOPSIS
 
@@ -114,16 +116,17 @@ sub new {
         Carp::croak("'ignore' requires a regex");
     }
     my $self = bless {
-        classes      => {},
         class_order  => {},
+        classes      => {},
+        duplicates   => {},
         exported     => {},
+        graph        => undef,
+        ignore       => $arg_for->{ignore},
+        list_classes => [$target_class],
         methods      => {},
         paths        => [ [$target_class] ],
-        list_classes => [$target_class],
-        graph        => undef,
         target       => $target_class,
         tree         => undef,
-        ignore       => $arg_for->{ignore},
         universal    => $arg_for->{universal},
     } => $class;
     $self->_initialize;
@@ -178,6 +181,15 @@ sub _add_class {
         if ( $info->package ne $class ) {
             $self->{exported}{$class}{$method} = $info->package;
         }
+
+        my $walker = B::Concise::compile( '-terse', $coderef );    # 1
+        B::Concise::walk_output( \my $buffer);
+        $walker->();    # 1 renders -terse
+        $buffer =~ s/^.*//;   # strip method name
+        $buffer =~ s/\(0x[^)]+\)/(0xHEXNUMBER)/g;   # normalize addresses
+        my $digest = Digest::MD5::md5_hex($buffer);
+        $self->{duplicates}{$digest} ||= [];
+        push @{ $self->{duplicates}{$digest} } => [$class, $method];
     }
 
     for my $method (@methods) {
@@ -237,8 +249,39 @@ the class.  Returns an empty string if no issues found.  Sample:
 sub report {
     my $self = shift;
 
-    # I know this is all a nasty hack, but I don't yet know how I want to
-    # refactor this.
+    my $report = $self->_get_overridden_report;
+    $report .= $self->_get_unreachable_report;
+    $report .= $self->_get_multiple_inheritance_report;
+    $report .= $self->_get_exported_report;
+    $report .= $self->_get_duplicate_method_report;
+
+    if ($report) {
+        my $target = $self->target_class;
+        $report = "Report for class: $target\n\n$report";
+    }
+    return $report;
+}
+
+sub _get_duplicate_method_report {
+    my $self = shift;
+
+    my $report = '';
+    my @duplicate = $self->duplicate_methods;
+    my (@methods, @duplicates);
+    if ( @duplicate ) {
+        foreach my $duplicate (@duplicate) {
+            push @methods => join '::' => @{ pop @$duplicate };
+            push @duplicates => join "\n" => map { join '::' => @$_ } @$duplicate;
+        }
+        $report .= "Duplicate Methods (Experimental)\n"
+          . $self->_build_report( 'Method', 'Duplicated In', \@methods,
+          \@duplicates );
+    }
+    return $report;
+}
+
+sub _get_overridden_report {
+    my $self = shift;
 
     my $report = '';
     my $overridden = $self->overridden;
@@ -251,7 +294,13 @@ sub report {
         $report .= "Overridden Methods\n"
           . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
     }
+    return $report;
+}
 
+sub _get_unreachable_report {
+    my $self = shift;
+
+    my $report = '';
     if ( my @unreachable = $self->unreachable ) {
         my ( @methods, @classes );
         for my $fq_method (@unreachable) {
@@ -262,18 +311,16 @@ sub report {
         $report .= "Unreachable Methods\n"
           . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
     }
+    return $report;
+}
 
+sub _get_multiple_inheritance_report {
+    my $self = shift;
+    my $report .= '';
     if ( my @multis = $self->multiple_inheritance ) {
         my @classes = map { join "\n" => $self->parents($_) } @multis;
         $report .= "Multiple Inheritance\n"
           . $self->_build_report( 'Class', 'Parents', \@multis, \@classes );
-    }
-
-    $report .= $self->_get_exported_report;
-
-    if ($report) {
-        my $target = $self->target_class;
-        $report = "Report for class: $target\n\n$report";
     }
     return $report;
 }
@@ -340,6 +387,7 @@ sub _get_widths {
     $longest = int( $width / 2 ) if $longest > ($width / 2);
     return ($longest, $width - $longest);
 }
+
 =head2 C<width>
 
  $sniff->width(80);
@@ -550,6 +598,59 @@ sub multiple_inheritance {
     return grep { $self->parents($_) > 1 } $self->classes;
 }
 
+=head2 C<duplicate_methods>
+
+B<Note>:  This method is very experimental and requires the L<B::Concise>
+module.
+
+ my $num_duplicates = $self->duplicate_methods;
+ my @duplicates     = $self->duplicate_methods;
+
+Returns either the number of duplicate methods found a list of array refs.
+Each arrayref contains a list of array references, each having a class name
+and method name.
+
+B<Note>:  We report duplicates based on identical op-trees.  If the method
+names are different or the variable names are different, that's OK.  Any
+change to the op-tree, however, will break this.  The following two methods
+are identical, even if they are in different packages.:
+
+ sub inc {
+    my ( $self, $value ) = @_;
+    return $value + 1;
+ }
+
+ sub increment {
+    my ( $proto, $number ) = @_;
+    return $number + 1;
+ }
+
+However, this will not match the above methods:
+
+ sub increment {
+    my ( $proto, $number ) = @_;
+    return 1 + $number;
+ }
+
+=head3 Code Smell:  duplicate methods
+
+This is frequently a sign of "cut and paste" code.  The duplication should be
+removed.  You may feel OK with this if the duplicated methods are exported
+"helper" subroutines such as "Carp::croak".
+
+=cut
+
+sub duplicate_methods {
+    my $self = shift;
+    my @duplicates;
+    foreach my $methods ( values%{ $self->{duplicates} } ) {
+        if (@$methods > 1) {
+            push @duplicates => $methods;
+        }
+    }
+    return @duplicates;
+}
+
 sub _add_relationships {
     my ( $self, $class, @parents ) = @_;
     $self->_add_class($_) foreach $class, @parents;
@@ -574,7 +675,7 @@ sub _add_child {
  print $sniff->to_string;
 
 For debugging, lets you print a string representation of your class hierarchy.
-Internally this is created by C<Graph::Easy> and I can't figure out how to
+Internally this is created by L<Graph::Easy> and I can't figure out how to
 force it to respect the order in which classes are ordered.  Thus, the
 'left/right' ordering may be incorrect.
 

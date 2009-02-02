@@ -19,11 +19,11 @@ use Class::Sniff;
     our @ISA = 'Abstract';
     use Carp 'croak';
     use Sub::Information as => 'inspect';   # exports 'inspect'
-    sub foo { }
+    sub foo { 1 }
 
     package Child2;
     our @ISA = 'Abstract';
-    sub foo { }
+    sub foo { 1 }
     sub bar { }
 
     package Grandchild;
@@ -38,6 +38,8 @@ my $sniff = Class::Sniff->new( { class => 'Grandchild' } );
 explain $sniff->{exported};
 can_ok $sniff, 'report';
 ok my $report = $sniff->report, '... and it should return a report of potential issues';
+
+explain [$sniff->duplicate_methods];
 
 like $report, qr/Report for class: Grandchild/,
     'The report should have a title';
@@ -65,6 +67,17 @@ like $report,
   qr/Child1 $bar croak $bar Carp $bar_newline inspect $bar Sub::Information/x,
   '... and not miss any';
 
+like $report, qr/Duplicate Methods/,
+    'The report should identify duplicate methods';
+like $report,
+    qr/Abstract::foo     $bar Grandchild::bar 
+                 $bar_newline Grandchild::quux
+                 $bar_newline Grandchild::foo
+                 $bar_newline Child2::bar
+                 $bar_newline Abstract::bar
+                 $bar_newline Abstract::baz $bar \n
+    \| \s* Child2::foo   $bar Child1::foo/x,
+  '... and not miss any';
 
 # Multiple search paths through a hierarchy are a smell because it implies MI
 # and possibly unreachable methods.

@@ -1,5 +1,8 @@
 Revision history for Class-Sniff
 
+0.05    02/02/2008
+        Added experimental support for tracking duplicate methods.
+
 0.04    02/02/2008
         Added 'exported' to detect exported 'methods'.
         Added "report" method to create a simple, human-readable report.
