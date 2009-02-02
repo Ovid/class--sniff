@@ -5,3 +5,4 @@
 * User-defined package variables (tough to do because pre 5.10 we have scalars
   reported with the same name as subs).
 * Add support for reporting classes found more than once in a tree.
+* Ambiguous methods (Foo::Bar->baz can be interpreted as Foo::Bar()->baz)

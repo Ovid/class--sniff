@@ -3,11 +3,12 @@ package Class::Sniff;
 use warnings;
 use strict;
 
-use Carp 'croak';
+use Carp ();
 use Tree;
 use Graph::Easy;
-use List::MoreUtils 'uniq';
+use List::MoreUtils ();
 use Devel::Symdump;
+use Text::SimpleTable;
 
 =head1 NAME
 
@@ -15,11 +16,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -100,15 +101,15 @@ a class hierarchy is pruned with C<ignore>, C<UNIVERSAL> may not show up.
 sub new {
     my ( $class, $arg_for ) = @_;
     my $target_class = $arg_for->{class}
-        or croak "'class' argument not supplied to 'new'";
+      or Carp::croak("'class' argument not supplied to 'new'");
     if ( exists $arg_for->{ignore} && 'Regexp' ne ref $arg_for->{ignore} ) {
-        croak "'ignore' requires a regex";
+        Carp::croak("'ignore' requires a regex");
     }
     my $self = bless {
         classes      => {},
         class_order  => {},
         methods      => {},
-        paths        => [[$target_class]],
+        paths        => [ [$target_class] ],
         list_classes => [$target_class],
         graph        => undef,
         target       => $target_class,
@@ -121,32 +122,33 @@ sub new {
 }
 
 sub _initialize {
-    my $self = shift;
+    my $self         = shift;
     my $target_class = $self->target_class;
+    $self->width(72);
     $self->_add_class($target_class);
     $self->{classes}{$target_class}{count} = 1;
     $self->{tree} = Tree->new($target_class);
-    $self->_build_tree($self->tree);
+    $self->_build_tree( $self->tree );
 
     my $graph = Graph::Easy->new;
-    for my $node ($self->tree->traverse) {
+    for my $node ( $self->tree->traverse ) {
         my $class = $node->value;
         next if $class eq $target_class;
-        $graph->add_edge_once($node->parent->value, $class);
+        $graph->add_edge_once( $node->parent->value, $class );
     }
-    $graph->set_attribute('graph', 'flow', 'up');
+    $graph->set_attribute( 'graph', 'flow', 'up' );
     $self->{graph} = $graph;
     $self->_finalize;
 }
 
 sub _finalize {
-    my $self = shift;
+    my $self    = shift;
     my @classes = $self->classes;
-    my $index = 0;
+    my $index   = 0;
     my %classes = map { $_ => $index++ } @classes;
 
     # sort in inheritance order
-    while ( my ($method, $classes) = each %{ $self->{methods} } ) {
+    while ( my ( $method, $classes ) = each %{ $self->{methods} } ) {
         @$classes = sort { $classes{$a} <=> $classes{$b} } @$classes;
     }
     $self->{class_order} = \%classes;
@@ -176,6 +178,131 @@ sub _add_class {
 
 =head1 INSTANCE METHODS
 
+=head2 C<report>
+
+ print $sniff->report;
+
+Prints out a detailed, human readable report of C<Class::Sniff>'s analysis of
+the class.  Returns an empty string if no issues found.  Sample:
+
+ Report for class: Grandchild
+ 
+ Overridden Methods
+ .--------+--------------------------------------------------------------------.
+ | Method | Class                                                              |
+ +--------+--------------------------------------------------------------------+
+ | bar    | Grandchild                                                         |
+ |        | Abstract                                                           |
+ |        | Child2                                                             |
+ | foo    | Grandchild                                                         |
+ |        | Child1                                                             |
+ |        | Abstract                                                           |
+ |        | Child2                                                             |
+ '--------+--------------------------------------------------------------------'
+ Unreachable Methods
+ .--------+--------------------------------------------------------------------.
+ | Method | Class                                                              |
+ +--------+--------------------------------------------------------------------+
+ | bar    | Child2                                                             |
+ | foo    | Child2                                                             |
+ '--------+--------------------------------------------------------------------'
+ Multiple Inheritance
+ .------------+----------------------------------------------------------------.
+ | Class      | Parents                                                        |
+ +------------+----------------------------------------------------------------+
+ | Grandchild | Child1                                                         |
+ |            | Child2                                                         |
+ '------------+----------------------------------------------------------------'
+
+=cut
+
+sub report {
+    my $self = shift;
+
+    # I know this is all a nasty hack, but I don't yet know how I want to
+    # refactor this.
+
+    my $report = '';
+    my $overridden = $self->overridden;
+    if ( %$overridden ) {
+        my @methods = sort keys %$overridden;
+        my @classes;
+        foreach my $method (@methods) {
+            push @classes => join "\n" => @{ $overridden->{$method} };
+        }
+        $report .= "Overridden Methods\n"
+          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
+    }
+
+    if ( my @unreachable = $self->unreachable ) {
+        my ( @methods, @classes );
+        for my $fq_method (@unreachable) {
+            $fq_method =~ /^(.*)::(.*)$/;    # time to rethink the API
+            push @methods => $2;
+            push @classes => $1;
+        }
+        $report .= "Unreachable Methods\n"
+          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
+    }
+
+    if ( my @multis = $self->multiple_inheritance ) {
+        my @classes = map { join "\n" => $self->parents($_) } @multis;
+        $report .= "Multiple Inheritance\n"
+          . $self->_build_report( 'Class', 'Parents', \@multis, \@classes );
+    }
+
+    if ($report) {
+        my $target = $self->target_class;
+        $report = "Report for class: $target\n\n$report";
+    }
+    return $report;
+}
+
+sub _build_report {
+    my ( $self, $title1, $title2, $strings1, $strings2 ) = @_;
+    unless ( @$strings1 == @$strings2 ) {
+        Carp::croak("PANIC:  Attempt to build unbalanced report");
+    }
+    my ( $width1, $width2 ) = $self->_get_widths( $title1, @$strings1 );
+    my $text =
+      Text::SimpleTable->new( [ $width1, $title1 ], [ $width2, $title2 ] );
+    for my $i ( 0 .. $#$strings1 ) {
+        $text->row( $strings1->[$i], $strings2->[$i] );
+    }
+    return $text->draw;
+}
+
+sub _get_widths {
+    my ( $self, $title, @strings ) = @_;
+
+    my $width = $self->width;
+    my $longest = length($title);
+    foreach my $string (@strings) {
+        my $length = length $string;
+        $longest = $length if $length > $longest;
+    }
+    $longest = int( $width / 2 ) if $longest > ($width / 2);
+    return ($longest, $width - $longest);
+}
+=head2 C<width>
+
+ $sniff->width(80);
+
+Set the width of the report.  Defaults to 72.
+
+=cut
+
+sub width {
+    my $self = shift;
+    return $self->{width} unless @_;
+    my $number = shift;
+    unless ( $number =~ /^\d+$/ && $number >= 40 ) {
+        Carp::croak(
+            "Argument to 'width' must be a number >= than 40, not ($number)");
+    }
+    $self->{width} = $number;
+}
+
 =head2 C<overridden>
 
  my $overridden = $sniff->overridden;
@@ -196,7 +323,7 @@ Accidental overriding of a method can be very hard to debug.
 sub overridden {
     my $self = shift;
     my %methods;
-    while ( my ($method, $classes) = each %{ $self->{methods} } ) {
+    while ( my ( $method, $classes ) = each %{ $self->{methods} } ) {
         $methods{$method} = $classes if @$classes > 1;
     }
     return \%methods;
@@ -231,7 +358,7 @@ sub unreachable {
     while ( my ( $method, $classes ) = each %$overridden ) {
         my @unreachable;
 
-        CLASS:
+      CLASS:
         for my $class (@$classes) {
             my $method_found = 0;
             for my $path (@paths) {
@@ -240,10 +367,10 @@ sub unreachable {
                     next CLASS;
                 }
                 for my $curr_class (@$path) {
-                    if ($curr_class eq $class) {
+                    if ( $curr_class eq $class ) {
                         next CLASS;
                     }
-                    if (not $method_found && $curr_class->can($method) ) {
+                    if ( not $method_found && $curr_class->can($method) ) {
                         $method_found = 1;
                     }
                 }
@@ -254,7 +381,7 @@ sub unreachable {
         }
     }
     my @unreachable;
-    while ( my ($method, $classes) = each %unreachable ) {
+    while ( my ( $method, $classes ) = each %unreachable ) {
         foreach my $class (@$classes) {
             push @unreachable => "$class\::$method";
         }
@@ -314,7 +441,7 @@ explanation.
 
 =cut
 
-sub paths       { 
+sub paths {
     my $self = shift;
     return @{ $self->{paths} } unless @_;
     $self->{paths} = [@_];
@@ -345,7 +472,7 @@ sub _add_relationships {
 
     # what if this is called more than once?
     $self->{classes}{$class}{parents} = \@parents;
-    $self->_add_child($_, $class) foreach @parents;
+    $self->_add_child( $_, $class ) foreach @parents;
     return $self;
 }
 
@@ -369,7 +496,7 @@ force it to respect the order in which classes are ordered.  Thus, the
 
 =cut
 
-sub to_string    { $_[0]->graph->as_ascii }
+sub to_string { $_[0]->graph->as_ascii }
 
 =head2 C<tree>
 
@@ -379,7 +506,7 @@ Returns a L<Tree> representation of the inheritance hierarchy.
 
 =cut
 
-sub tree         { $_[0]->{tree} }
+sub tree { $_[0]->{tree} }
 
 =head2 C<graph>
 
@@ -402,7 +529,7 @@ right.
 
 =cut
 
-sub graph        { $_[0]->{graph} }
+sub graph { $_[0]->{graph} }
 
 =head2 C<target_class>
 
@@ -422,7 +549,7 @@ This is the regex provided (if any) to the constructor's C<ignore> parameter.
 
 =cut
 
-sub ignore       { $_[0]->{ignore} }
+sub ignore { $_[0]->{ignore} }
 
 =head2 C<universal>
 
@@ -435,7 +562,7 @@ far in the hierarchy, the 'UNIVERSAL' class will not be added.
 
 =cut
 
-sub universal       { $_[0]->{universal} }
+sub universal { $_[0]->{universal} }
 
 =head2 C<classes>
 
@@ -448,7 +575,7 @@ In list context, lists the classes in the hierarchy, in default search order.
 
 =cut
 
-sub classes      { @{ $_[0]->{list_classes} } }
+sub classes { @{ $_[0]->{list_classes} } }
 
 =head2 C<parents>
 
@@ -474,7 +601,7 @@ sub parents {
     my ( $self, $class ) = @_;
     $class ||= $self->target_class;
     unless ( exists $self->{classes}{$class} ) {
-        croak "No such class '$class' found in hierarchy";
+        Carp::croak("No such class '$class' found in hierarchy");
     }
     return @{ $self->{classes}{$class}{parents} };
 }
@@ -498,7 +625,7 @@ sub children {
     my ( $self, $class ) = @_;
     $class ||= $self->target_class;
     unless ( exists $self->{classes}{$class} ) {
-        croak "No such class '$class' found in hierarchy";
+        Carp::croak("No such class '$class' found in hierarchy");
     }
     return @{ $self->{classes}{$class}{children} };
 }
@@ -522,7 +649,7 @@ sub methods {
     my ( $self, $class ) = @_;
     $class ||= $self->target_class;
     unless ( exists $self->{classes}{$class} ) {
-        croak "No such class '$class' found in hierarchy";
+        Carp::croak("No such class '$class' found in hierarchy");
     }
     return @{ $self->{classes}{$class}{methods} };
 }
@@ -532,7 +659,7 @@ sub _get_parents {
     return if $class eq 'UNIVERSAL';
     no strict 'refs';
 
-    my @parents = uniq @{"$class\::ISA"};
+    my @parents = List::MoreUtils::uniq( @{"$class\::ISA"} );
     if ( $self->universal && not @parents ) {
         @parents = 'UNIVERSAL';
     }
@@ -543,7 +670,7 @@ sub _get_parents {
 }
 
 sub _build_tree {
-    my ($self,@nodes) = @_;
+    my ( $self, @nodes ) = @_;
 
     for my $node (@nodes) {
         my $class = $node->value;
@@ -557,7 +684,7 @@ sub _build_tree {
         # order
         foreach my $parent (@parents) {
             push @{ $self->{list_classes} } => $parent
-                unless grep { $_ eq $parent } @{ $self->{list_classes} };
+              unless grep { $_ eq $parent } @{ $self->{list_classes} };
             $self->{classes}{$parent}{count}++;
             my $tree = Tree->new($parent);
             $node->add_child($tree);
@@ -572,18 +699,22 @@ sub _build_tree {
 sub _build_paths {
     my ( $self, $class, @parents ) = @_;
 
-    my @paths = $self->paths;
-    for my $i ( 0 .. $#paths ) {
-        my $path = $paths[$i];
-        if ( $path->[-1] eq $class ) {
-            my @new_paths;
-            for my $parent_class (@parents) {
-                push @new_paths => [@$path, $parent_class];
-            }
-            splice @paths, $i, 1, @new_paths;
-            $self->paths(@paths);
-        }
-    }
+    # XXX strictly speaking, we can skip $do_chg, but if path() get's
+    # expensive (such as testing for valid classes or circularity), then we
+    # need it.
+    my $do_chg;
+
+    my @paths = map {
+        my $path = $_;
+        $path->[-1] eq $class
+          ? do {
+            ++$do_chg;
+            map { [ @$path, $_ ] } @parents;
+          }
+          : $path
+    } $self->paths;
+
+    $self->paths(@paths) if $do_chg;
 }
 
 =head1 CAVEATS AND PLANS
@@ -669,4 +800,4 @@ under the same terms as Perl itself.
 
 =cut
 
-1; # End of Class::Sniff
+1;    # End of Class::Sniff

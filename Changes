@@ -1,5 +1,9 @@
 Revision history for Class-Sniff
 
+0.04
+        Added "report" method to create a simple, human-readable report.
+        Added "build_path" fix from Aristotle.
+
 0.03    01/02/2008
         Added 'multiple_inheritance' method.
         Added support for including the "UNIVERSAL" class.

@@ -133,6 +133,7 @@ my $platypus = Class::Sniff->new({
 });
 eq_or_diff [$platypus->unreachable], ['Duck::quack'],
     'Unbalanced inheritance graphs are parsed properly';
+explain $sniff->report;
 
 # Circular inheritance really breaks things!
 #{
