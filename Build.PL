@@ -7,13 +7,15 @@ my $builder = Module::Build->new(
     license           => 'perl',
     dist_author       => 'Curtis "Ovid" Poe <ovid@cpan.org>',
     dist_version_from => 'lib/Class/Sniff.pm',
-    build_requires    => {
-        'Test::Most'        => 0.20,
-        'Tree'              => 1.01,
+    requires => {
+        'Devel::Symdump'    => 2.08,
         'Graph::Easy'       => 0.64,
         'List::MoreUtils'   => 0.22,
-        'Devel::Symdump'    => 2.08,
         'Text::SimpleTable' => 0.05,
+        'Tree'              => 1.01,
+    },
+    build_requires    => {
+        'Test::Most'        => 0.20,
     },
     add_to_cleanup     => ['Class-Sniff-*'],
     create_makefile_pl => 'traditional',
