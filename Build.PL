@@ -11,6 +11,7 @@ my $builder = Module::Build->new(
         'Devel::Symdump'    => 2.08,
         'Graph::Easy'       => 0.64,
         'List::MoreUtils'   => 0.22,
+        'Sub::Information'  => 0.02, 
         'Text::SimpleTable' => 0.05,
         'Tree'              => 1.01,
     },

@@ -1,6 +1,7 @@
 Revision history for Class-Sniff
 
-0.04
+0.04    02/02/2008
+        Added 'exported' to detect exported 'methods'.
         Added "report" method to create a simple, human-readable report.
         Added "build_path" fix from Aristotle.
 

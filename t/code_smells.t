@@ -17,6 +17,8 @@ use Class::Sniff;
 
     package Child1;
     our @ISA = 'Abstract';
+    use Carp 'croak';
+    use Sub::Information as => 'inspect';   # exports 'inspect'
     sub foo { }
 
     package Child2;
@@ -33,6 +35,36 @@ use Class::Sniff;
 
 can_ok 'Class::Sniff', 'new';
 my $sniff = Class::Sniff->new( { class => 'Grandchild' } );
+explain $sniff->{exported};
+can_ok $sniff, 'report';
+ok my $report = $sniff->report, '... and it should return a report of potential issues';
+
+like $report, qr/Report for class: Grandchild/,
+    'The report should have a title';
+
+my $bar = qr/[^|]*\|[^|]*/;
+my $bar_newline = qr/$bar \| \s* $bar/x;
+like $report, qr/Overridden Methods/,
+    'The report should identify overridden methods';
+like $report, qr/bar $bar Grandchild $bar_newline Abstract $bar_newline Child2 /,
+    '... identifying the method and the class(es) it is overridden in';
+
+like $report, qr/Unreachable Methods/,
+    'The report should identify unreachable methods';
+like $report, qr/bar $bar Child2/,
+    '... identifying the method and the class(es) it is unreachable in';
+
+like $report, qr/Multiple Inheritance/,
+    'The report should identify multiple inheritance';
+like $report, qr/Grandchild $bar Child1 $bar_newline Child2 /x,
+    '... identifying all parent classes';
+
+like $report, qr/Exported Subroutines/,
+    'The report should identify exported subroutines';
+like $report,
+  qr/Child1 $bar croak $bar Carp $bar_newline inspect $bar Sub::Information/x,
+  '... and not miss any';
+
 
 # Multiple search paths through a hierarchy are a smell because it implies MI
 # and possibly unreachable methods.
@@ -133,7 +165,6 @@ my $platypus = Class::Sniff->new({
 });
 eq_or_diff [$platypus->unreachable], ['Duck::quack'],
     'Unbalanced inheritance graphs are parsed properly';
-explain $sniff->report;
 
 # Circular inheritance really breaks things!
 #{

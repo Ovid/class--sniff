@@ -9,10 +9,12 @@ WriteMakefile
           'VERSION_FROM' => 'lib/Class/Sniff.pm',
           'PREREQ_PM' => {
                            'Tree' => '1.01',
-                           'Test::Most' => 0,
+                           'Test::Most' => '0.2',
+                           'Text::SimpleTable' => '0.05',
                            'Graph::Easy' => '0.64',
                            'Devel::Symdump' => '2.08',
-                           'List::MoreUtils' => '0.22'
+                           'List::MoreUtils' => '0.22',
+                           'Sub::Information' => '0.02'
                          }
         )
 ;

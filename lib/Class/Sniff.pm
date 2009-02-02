@@ -4,11 +4,12 @@ use warnings;
 use strict;
 
 use Carp ();
-use Tree;
+use Devel::Symdump;
 use Graph::Easy;
 use List::MoreUtils ();
-use Devel::Symdump;
+use Sub::Information ();
 use Text::SimpleTable;
+use Tree;
 
 =head1 NAME
 
@@ -46,6 +47,13 @@ our $VERSION = '0.04';
 =head1 DESCRIPTION
 
 B<ALPHA> code.  You've been warned.
+
+The interface is rather ad-hoc at the moment and is likely to change.  After
+creating a new instance, calling the C<report> method is your best option.
+You can then visually examine it to look for potential problems:
+
+ my $sniff = Class::Sniff->new({class => 'Some::Class'});
+ print $sniff->report;
 
 This module attempts to help programmers find 'code smells' in the
 object-oriented code.  If it reports something, it does not mean that your
@@ -108,6 +116,7 @@ sub new {
     my $self = bless {
         classes      => {},
         class_order  => {},
+        exported     => {},
         methods      => {},
         paths        => [ [$target_class] ],
         list_classes => [$target_class],
@@ -161,6 +170,15 @@ sub _add_class {
     # Do I really want to throw this away?
     my $symdump = Devel::Symdump->new($class);
     my @methods = map { s/^$class\:://; $_ } $symdump->functions;
+
+    foreach my $method (@methods) {
+        my $coderef = $class->can($method)
+            or Carp::croak("Panic: $class->can($method) returned false!");
+        my $info = Sub::Information::inspect($coderef);
+        if ( $info->package ne $class ) {
+            $self->{exported}{$class}{$method} = $info->package;
+        }
+    }
 
     for my $method (@methods) {
         $self->{methods}{$method} ||= [];
@@ -251,9 +269,47 @@ sub report {
           . $self->_build_report( 'Class', 'Parents', \@multis, \@classes );
     }
 
+    $report .= $self->_get_exported_report;
+
     if ($report) {
         my $target = $self->target_class;
         $report = "Report for class: $target\n\n$report";
+    }
+    return $report;
+}
+
+sub _get_exported_report {
+    my $self = shift;
+    my $exported = $self->exported;
+    my $report = '';
+    if ( my @classes = sort keys %$exported ) {
+        my ($longest_c, $longest_m) = (length('Class'), length('Method') );
+        my (@subs,@sources);
+        foreach my $class (@classes) {
+            my (@temp_subs, @temp_sources);
+            foreach my $sub (sort keys %{ $exported->{$class} } ) {
+                push @temp_subs => $sub;
+                push @temp_sources => $exported->{$class}{$sub};
+                $longest_c = length($class) if length($class) > $longest_c;
+                $longest_m = length($sub)   if length($sub) > $longest_m;
+            }
+            push @subs    => join "\n" => @temp_subs;
+            push @sources => join "\n" => @temp_sources;
+        }
+        my $width = $self->width - 3;
+        my $third = int($width/3);
+        $longest_c = $third if $longest_c > $third;
+        $longest_m = $third if $longest_m > $third;
+        my $rest = $width - ($longest_c + $longest_m);
+        my $text = Text::SimpleTable->new(
+            [ $longest_c, 'Class' ],
+            [ $longest_m, 'Method' ],
+            [ $rest,      'Exported From Package' ]
+        );
+        for my $i ( 0 .. $#classes ) {
+            $text->row( $classes[$i], $subs[$i], $sources[$i] );
+        }
+        $report .= "Exported Subroutines\n".$text->draw;
     }
     return $report;
 }
@@ -312,7 +368,7 @@ which has been overridden and the arrays are lists of all classes the method
 is defined in (not just which one's it's overridden in).  The order of the
 classes is in Perl's default inheritance search order.
 
-=head3 Code Smell
+=head3 Code Smell:  overridden methods
 
 Overridden methods are not necessarily a code smell, but you should check them
 to find out if you've overridden something you didn't expect to override.
@@ -329,6 +385,34 @@ sub overridden {
     return \%methods;
 }
 
+=head2 C<exported>
+
+    my $exported = $sniff->exported;
+
+Returns a hashref of all classes which have subroutines exported into them.
+The structure is:
+
+ {
+     $class1 => {
+         $sub1 => $exported_from1,
+         $sub2 => $exported_from2,
+     },
+     $class2 => { ... }
+ }
+
+Returns an empty hashref if no exported subs are found.
+
+=head3 Code Smell:  exported subroutines
+
+Generally speaking, you should not be exporting subroutines into OO code.
+Quite often this happens with things like C<Carp::croak> and other modules
+which export "helper" functions.  These functions may not behave like you
+expect them to since they're generally not intended to be called as methods.
+
+=cut
+
+sub exported { $_[0]->{exported} }
+
 =head2 C<unreachable>
 
  my @unreachable = $sniff->unreachable;
@@ -341,7 +425,7 @@ Returns a list of fully qualified method names (e.g.,
 inheritance search order.  It does this by searching the "paths" returned by
 the C<paths> method.
 
-=head3 Code Smell
+=head3 Code Smell:  unreachable methods
 
 Pretty straight-forward here.  If a method is unreachable, it's likely to be
 dead code.  However, you might have a reason for this and maybe you're calling
@@ -428,7 +512,7 @@ structured as above:
 At the present time, we do I<no> validation of what's passed in.  It's just an
 experimental (and untested) hack.
 
-=head3 Code Smell
+=head3 Code Smell:  paths
 
 Multiple inheritance paths are tricky to get right, make it easy to have
 'unreachable' methods and have a greater cognitive load on the programmer.
@@ -455,7 +539,7 @@ sub paths {
 
 Returns a list of all classes which inherit from more than one class.
 
-=head3 Code Smell
+=head3 Code Smell:  multiple inheritance
 
 See the C<Code Smell> section for C<paths>
 
@@ -590,7 +674,7 @@ In scalar context, lists the number of parents a class has.
 
 In list context, lists the parents a class has.
 
-=head3 Code Smell
+=head3 Code Smell:  multiple parens (multiple inheritance)
 
 If a class has more than one parent, you may have unreachable or conflicting
 methods.
