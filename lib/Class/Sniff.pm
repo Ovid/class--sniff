@@ -289,38 +289,26 @@ it directly.
 sub unreachable {
     my $self       = shift;
     my $overridden = $self->overridden;
-    my @paths      = $self->paths;
-    my %unreachable;
+    my @unreachable;
 
     while ( my ( $method, $classes ) = each %$overridden ) {
-        my @unreachable;
+        my @classes;
 
       CLASS:
         for my $class (@$classes) {
             my $method_found = 0;
-            for my $path (@paths) {
+            for my $path ($self->paths) {
                 if ($method_found) {
-                    push @unreachable => $class;
+                    push @unreachable => "$class\::$method";
                     next CLASS;
                 }
                 for my $curr_class (@$path) {
-                    if ( $curr_class eq $class ) {
-                        next CLASS;
-                    }
+                    next CLASS if $curr_class eq $class;
                     if ( not $method_found && $curr_class->can($method) ) {
                         $method_found = 1;
                     }
                 }
             }
-        }
-        if (@unreachable) {
-            $unreachable{$method} = \@unreachable;
-        }
-    }
-    my @unreachable;
-    while ( my ( $method, $classes ) = each %unreachable ) {
-        foreach my $class (@$classes) {
-            push @unreachable => "$class\::$method";
         }
     }
     return @unreachable;
