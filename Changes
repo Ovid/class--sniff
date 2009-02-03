@@ -1,6 +1,7 @@
 Revision history for Class-Sniff
 
 0.06
+        - Circular paths are now a fatal error.
 
 0.05    02/02/2008
         - Added experimental support for tracking duplicate methods.

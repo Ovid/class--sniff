@@ -180,14 +180,15 @@ eq_or_diff [$platypus->unreachable], ['Duck::quack'],
     'Unbalanced inheritance graphs are parsed properly';
 
 # Circular inheritance really breaks things!
-#{
-#    package Un;
-#    our @ISA = 'Deux';
-#    package Deux;
-#    our @ISA = 'Trois';
-#    package Trois;
-#    our @ISA = 'Un';
-#}
-#
-#my $usniff = Class::Sniff->new({class => 'Un'});
-#explain $usniff->to_string;
+{
+    package Un;
+    our @ISA = 'Deux';
+    package Deux;
+    our @ISA = 'Trois';
+    package Trois;
+    our @ISA = 'Un';
+}
+
+throws_ok { Class::Sniff->new({class => 'Un'}) }
+    qr/^Circular path found/,
+    'Circular paths should throw a fatal error';

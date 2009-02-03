@@ -137,7 +137,7 @@ sub _initialize {
     my $self         = shift;
     my $target_class = $self->target_class;
     $self->width(72);
-    $self->_add_class($target_class);
+    $self->_register_class($target_class);
     $self->{classes}{$target_class}{count} = 1;
     $self->{tree} = Tree->new($target_class);
     $self->_build_tree( $self->tree );
@@ -166,7 +166,7 @@ sub _finalize {
     $self->{class_order} = \%classes;
 }
 
-sub _add_class {
+sub _register_class {
     my ( $self, $class ) = @_;
     return if exists $self->{classes}{$class};
 
@@ -826,7 +826,8 @@ sub methods {
 }
 
 sub _get_parents {
-    my ( $self, $class ) = @_;
+    my ( $self, $node ) = @_;
+    my $class = $node->value;
     return if $class eq 'UNIVERSAL';
     no strict 'refs';
 
@@ -845,23 +846,13 @@ sub _build_tree {
     my ( $self, @nodes ) = @_;
 
     for my $node (@nodes) {
-        my $class = $node->value;
-
-        my @parents = $self->_get_parents($class) or return;
-
-        $self->_build_paths( $class, @parents );
-        $self->_add_relationships( $class, @parents );
-
-        # This algorithm will follow classes in Perl's default inheritance
-        # order
-        foreach my $parent (@parents) {
-            push @{ $self->{list_classes} } => $parent
-              unless grep { $_ eq $parent } @{ $self->{list_classes} };
-            $self->{classes}{$parent}{count}++;
-            my $tree = Tree->new($parent);
-            $node->add_child($tree);
-            $self->_build_tree($tree);
+        return unless $self->_get_parents($node);
+        foreach my $class ( $node->value, $self->_get_parents($node) ) {
+            $self->_register_class($class);
         }
+        $self->_add_children($node);
+        $self->_build_paths($node);
+        $self->_add_parents($node);
     }
 }
 
@@ -869,10 +860,13 @@ sub _build_tree {
 # will take through the code to find a method.  This is based on Perl's
 # default search order, not C3.
 sub _build_paths {
-    my ( $self, $class, @parents ) = @_;
+    my ( $self, $node) = @_;
 
+    my $class = $node->value;
+    my @parents = $self->_get_parents($node);
+    
     # XXX strictly speaking, we can skip $do_chg, but if path() get's
-    # expensive (such as testing for valid classes or circularity), then we
+    # expensive (such as testing for valid classes), then we
     # need it.
     my $do_chg;
     my @paths;
@@ -896,11 +890,25 @@ sub _build_paths {
     $self->paths(@paths) if $do_chg;
 }
 
-sub _add_relationships {
-    my ( $self, $class, @parents ) = @_;
-    $self->_add_class($_) foreach $class, @parents;
+sub _add_parents {
+    my ( $self, $node ) = @_;
 
-    # what if this is called more than once?
+    # This algorithm will follow classes in Perl's default inheritance
+    # order
+    foreach my $parent ($self->_get_parents($node)) {
+        push @{ $self->{list_classes} } => $parent
+          unless grep { $_ eq $parent } @{ $self->{list_classes} };
+        $self->{classes}{$parent}{count}++;
+        my $tree = Tree->new($parent);
+        $node->add_child($tree);
+        $self->_build_tree($tree);
+    }
+}
+sub _add_children {
+    my ( $self, $node ) = @_;
+    my $class   = $node->value;
+    my @parents = $self->_get_parents($node);
+
     $self->{classes}{$class}{parents} = \@parents;
     $self->_add_child( $_, $class ) foreach @parents;
     return $self;
