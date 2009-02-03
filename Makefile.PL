@@ -16,7 +16,7 @@ WriteMakefile
                            'Digest::MD5' => '2.36',
                            'Graph::Easy' => '0.64',
                            'List::MoreUtils' => '0.22',
-                           'Sub::Information' => '0.02'
+                           'Sub::Information' => '0.1'
                          }
         )
 ;

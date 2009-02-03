@@ -104,6 +104,12 @@ Optional.
 If present and true, will attempt to include the C<UNIVERSAL> base class.  If
 a class hierarchy is pruned with C<ignore>, C<UNIVERSAL> may not show up.
 
+=item * method_length
+
+If present, will set the "maximum length" of a method before it's reported as
+a code smell.  This feature is I<highly> experimental.  See C<long_methods>
+for details.
+
 =back
 
 =cut
@@ -116,18 +122,20 @@ sub new {
         Carp::croak("'ignore' requires a regex");
     }
     my $self = bless {
-        class_order  => {},
-        classes      => {},
-        duplicates   => {},
-        exported     => {},
-        graph        => undef,
-        ignore       => $arg_for->{ignore},
-        list_classes => [$target_class],
-        methods      => {},
-        paths        => [ [$target_class] ],
-        target       => $target_class,
-        tree         => undef,
-        universal    => $arg_for->{universal},
+        class_order   => {},
+        classes       => {},
+        duplicates    => {},
+        exported      => {},
+        graph         => undef,
+        ignore        => $arg_for->{ignore},
+        list_classes  => [$target_class],
+        long_methods  => {},
+        methods       => {},
+        paths         => [ [$target_class] ],
+        target        => $target_class,
+        tree          => undef,
+        universal     => $arg_for->{universal},
+        method_length => ( $arg_for->{method_length} || 50 ),
     } => $class;
     $self->_initialize;
     return $self;
@@ -180,6 +188,15 @@ sub _register_class {
         my $info = Sub::Information::inspect($coderef);
         if ( $info->package ne $class ) {
             $self->{exported}{$class}{$method} = $info->package;
+        }
+        else {
+            eval {
+                my $line = $info->line;
+                my $length  = B::svref_2object($coderef)->GV->LINE - $line;
+                if ( $length > $self->method_length ) {
+                    $self->{long_methods}{"$class\::$method"} = $length;
+                }
+            };
         }
 
         my $walker = B::Concise::compile( '-terse', $coderef );    # 1
@@ -455,6 +472,64 @@ sub duplicate_methods {
     return @duplicates;
 }
 
+=head2 C<long_methods> (highly experimental)
+
+ my $num_long_methods = $sniff->long_methods;
+ my %long_methods     = $sniff->long_methods;
+
+Returns methods longer than C<method_length>.  This value defaults to 50 and
+can be overridden in the constructor (but not later).
+
+Caveats:  this is experimental and depends on C<Sub::Information> 0.10 and the
+ill-documented C<B> modules.  Specifically, it relies on the following:
+
+=over 4
+
+=item * How to count the length of a method.
+
+ my $start_line = B::svref_2object($coderef)->START->line;
+ my $end_line   = B::svref_2object($coderef)->GV->LINE;
+ my $method_length = $end_line - $start_line;
+
+The C<$start_line> returns the line number of the I<first expression> in the
+subroutine, not the C<sub foo { ...> declaration.  The subroutine's
+declaration actually ends at the ending curly brace, so the following method
+would be considered 3 lines long, even though you might count it differently:
+
+ sub new {
+     # this is our constructor
+     my ( $class, $arg_for ) = @_;
+     my $self = bless {} => $class;
+     return $self;
+ }
+
+=cut
+
+sub long_methods { %{ $_[0]->{long_methods} } }
+
+=item * Exported methods
+
+These are simply ignored because the C<B> modules think they start and end in
+different packages.
+
+=item * Where does it really start?
+
+If you've taken a reference to a method I<prior> to the declaration of the
+reference being seen, Perl might report a negative length or simply blow up.
+We trap that for you and you'll never see those.
+
+=back
+
+Let me know how it works out :)
+
+=head3 Code Smell:  long methods
+
+Long methods are probably doing to much and should be broken down into smaller
+methods.  They're harder to follow, harder to debug, and if they're doing more
+than one thing, you might find that you need that functionality elsewhere, but
+now it's tightly coupled to the long method's behavior.  As always, use your
+judgment.
+
 =head2 C<parents>
 
  # defaults to 'target_class'
@@ -532,6 +607,7 @@ sub report {
     $report .= $self->_get_multiple_inheritance_report;
     $report .= $self->_get_exported_report;
     $report .= $self->_get_duplicate_method_report;
+    $report .= $self->_get_long_method_report;
 
     if ($report) {
         my $target = $self->target_class;
@@ -639,6 +715,22 @@ sub _get_exported_report {
     return $report;
 }
 
+sub _get_long_method_report {
+    my $self = shift;
+    my $report .= '';
+    my %long_methods = $self->long_methods;
+    if ( my @methods = sort keys %long_methods ) {
+        my @lengths;
+        foreach my $method (@methods) {
+            push @lengths => $long_methods{$method};
+        }
+        $report .= "Long Methods (experimental)\n"
+          . $self->_build_report( 'Method', 'Approximate Length',
+            \@methods, \@lengths );
+    }
+    return $report;
+}
+
 sub _build_report {
     my ( $self, $title1, $title2, $strings1, $strings2 ) = @_;
     unless ( @$strings1 == @$strings2 ) {
@@ -740,6 +832,17 @@ This is the class you originally asked to sniff.
 =cut
 
 sub target_class { $_[0]->{target} }
+
+=head2 C<method_length>
+
+ my $method_length = $sniff->method_length;
+
+This is the maximum allowed length of a method before being reported as a code
+smell.  See C<method_length> in the constructor.
+
+=cut
+
+sub method_length { $_[0]->{method_length} }
 
 =head2 C<ignore>
 
@@ -927,11 +1030,6 @@ sub _add_child {
 
 =over 4
 
-=item * Circular Inheritance
-
-Currently, any circular inheritances causes a 'Deep recursion' failure, so
-don't do that.
-
 =item * Package Variables
 
 User-defined package variables in OO code are a code smell, but with versions
@@ -943,16 +1041,6 @@ future (there will be exceptions, such as with @ISA).
 
 I'd like support for alternate method resolution orders.  If your classes use
 C3, you may get erroneous results.  See L<paths> for a workaround.
-
-=item * Exporting
-
-Many packages (such as L<Data::Dumper>) export functions by default and these
-show up as methods.  We'll detect those later.
-
-=item * Duplicate Methods
-
-It's rather common for someone to cut-n-paste a method from one class to
-another.  We'll try and detect that, too.  L<Sub::Information> may help there.
 
 =back
 

@@ -10,7 +10,20 @@ use Class::Sniff;
 
     package Abstract;
 
-    sub new { bless {} => shift }
+    sub new {
+        my ( $class, $arg_for ) = @_;
+        #
+        # Forcing this to be a long method to force a 'long method' report
+        #
+        #
+        #
+        #
+        #
+        #
+        my $self = bless {} => $class;
+        return $self;
+    }
+
     sub foo { }
     sub bar { }
     sub baz { }
@@ -34,12 +47,9 @@ use Class::Sniff;
 }
 
 can_ok 'Class::Sniff', 'new';
-my $sniff = Class::Sniff->new( { class => 'Grandchild' } );
-explain $sniff->{exported};
+my $sniff = Class::Sniff->new( { class => 'Grandchild', method_length => 10 } );
 can_ok $sniff, 'report';
 ok my $report = $sniff->report, '... and it should return a report of potential issues';
-
-explain [$sniff->duplicate_methods];
 
 like $report, qr/Report for class: Grandchild/,
     'The report should have a title';
@@ -77,6 +87,11 @@ like $report,
                  $bar_newline Abstract::bar
                  $bar_newline Abstract::baz $bar \n
     \| \s* Child2::foo   $bar Child1::foo/x,
+  '... and not miss any';
+like $report, qr/Long Methods/,
+    'The report should identify long methods';
+like $report,
+    qr/Abstract::new $bar \d+/x,
   '... and not miss any';
 
 # Multiple search paths through a hierarchy are a smell because it implies MI
