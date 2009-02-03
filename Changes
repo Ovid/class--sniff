@@ -1,21 +1,24 @@
 Revision history for Class-Sniff
 
+0.06
+
 0.05    02/02/2008
-        Added experimental support for tracking duplicate methods.
+        - Added experimental support for tracking duplicate methods.
+        - Started documentation reorganization.
 
 0.04    02/02/2008
-        Added 'exported' to detect exported 'methods'.
-        Added "report" method to create a simple, human-readable report.
-        Added "build_path" fix from Aristotle.
+        - Added 'exported' to detect exported 'methods'.
+        - Added "report" method to create a simple, human-readable report.
+        - Added "build_path" fix from Aristotle.
 
 0.03    01/02/2008
-        Added 'multiple_inheritance' method.
-        Added support for including the "UNIVERSAL" class.
+        - Added 'multiple_inheritance' method.
+        - Added support for including the "UNIVERSAL" class.
 
 0.02    01/02/2008
-        Added documentation.
-        Made the 'unreachable' return more sane.
+        - Added documentation.
+        - Made the 'unreachable' return more sane.
 
 0.01    01/02/2008
-        First version, released on an unsuspecting world.
+        - First version, released on an unsuspecting world.
 

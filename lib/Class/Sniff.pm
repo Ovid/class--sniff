@@ -206,206 +206,7 @@ sub _add_class {
     return $self;
 }
 
-=head1 INSTANCE METHODS
-
-=head2 C<report>
-
- print $sniff->report;
-
-Prints out a detailed, human readable report of C<Class::Sniff>'s analysis of
-the class.  Returns an empty string if no issues found.  Sample:
-
- Report for class: Grandchild
- 
- Overridden Methods
- .--------+--------------------------------------------------------------------.
- | Method | Class                                                              |
- +--------+--------------------------------------------------------------------+
- | bar    | Grandchild                                                         |
- |        | Abstract                                                           |
- |        | Child2                                                             |
- | foo    | Grandchild                                                         |
- |        | Child1                                                             |
- |        | Abstract                                                           |
- |        | Child2                                                             |
- '--------+--------------------------------------------------------------------'
- Unreachable Methods
- .--------+--------------------------------------------------------------------.
- | Method | Class                                                              |
- +--------+--------------------------------------------------------------------+
- | bar    | Child2                                                             |
- | foo    | Child2                                                             |
- '--------+--------------------------------------------------------------------'
- Multiple Inheritance
- .------------+----------------------------------------------------------------.
- | Class      | Parents                                                        |
- +------------+----------------------------------------------------------------+
- | Grandchild | Child1                                                         |
- |            | Child2                                                         |
- '------------+----------------------------------------------------------------'
-
-=cut
-
-sub report {
-    my $self = shift;
-
-    my $report = $self->_get_overridden_report;
-    $report .= $self->_get_unreachable_report;
-    $report .= $self->_get_multiple_inheritance_report;
-    $report .= $self->_get_exported_report;
-    $report .= $self->_get_duplicate_method_report;
-
-    if ($report) {
-        my $target = $self->target_class;
-        $report = "Report for class: $target\n\n$report";
-    }
-    return $report;
-}
-
-sub _get_duplicate_method_report {
-    my $self = shift;
-
-    my $report = '';
-    my @duplicate = $self->duplicate_methods;
-    my (@methods, @duplicates);
-    if ( @duplicate ) {
-        foreach my $duplicate (@duplicate) {
-            push @methods => join '::' => @{ pop @$duplicate };
-            push @duplicates => join "\n" => map { join '::' => @$_ } @$duplicate;
-        }
-        $report .= "Duplicate Methods (Experimental)\n"
-          . $self->_build_report( 'Method', 'Duplicated In', \@methods,
-          \@duplicates );
-    }
-    return $report;
-}
-
-sub _get_overridden_report {
-    my $self = shift;
-
-    my $report = '';
-    my $overridden = $self->overridden;
-    if ( %$overridden ) {
-        my @methods = sort keys %$overridden;
-        my @classes;
-        foreach my $method (@methods) {
-            push @classes => join "\n" => @{ $overridden->{$method} };
-        }
-        $report .= "Overridden Methods\n"
-          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
-    }
-    return $report;
-}
-
-sub _get_unreachable_report {
-    my $self = shift;
-
-    my $report = '';
-    if ( my @unreachable = $self->unreachable ) {
-        my ( @methods, @classes );
-        for my $fq_method (@unreachable) {
-            $fq_method =~ /^(.*)::(.*)$/;    # time to rethink the API
-            push @methods => $2;
-            push @classes => $1;
-        }
-        $report .= "Unreachable Methods\n"
-          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
-    }
-    return $report;
-}
-
-sub _get_multiple_inheritance_report {
-    my $self = shift;
-    my $report .= '';
-    if ( my @multis = $self->multiple_inheritance ) {
-        my @classes = map { join "\n" => $self->parents($_) } @multis;
-        $report .= "Multiple Inheritance\n"
-          . $self->_build_report( 'Class', 'Parents', \@multis, \@classes );
-    }
-    return $report;
-}
-
-sub _get_exported_report {
-    my $self = shift;
-    my $exported = $self->exported;
-    my $report = '';
-    if ( my @classes = sort keys %$exported ) {
-        my ($longest_c, $longest_m) = (length('Class'), length('Method') );
-        my (@subs,@sources);
-        foreach my $class (@classes) {
-            my (@temp_subs, @temp_sources);
-            foreach my $sub (sort keys %{ $exported->{$class} } ) {
-                push @temp_subs => $sub;
-                push @temp_sources => $exported->{$class}{$sub};
-                $longest_c = length($class) if length($class) > $longest_c;
-                $longest_m = length($sub)   if length($sub) > $longest_m;
-            }
-            push @subs    => join "\n" => @temp_subs;
-            push @sources => join "\n" => @temp_sources;
-        }
-        my $width = $self->width - 3;
-        my $third = int($width/3);
-        $longest_c = $third if $longest_c > $third;
-        $longest_m = $third if $longest_m > $third;
-        my $rest = $width - ($longest_c + $longest_m);
-        my $text = Text::SimpleTable->new(
-            [ $longest_c, 'Class' ],
-            [ $longest_m, 'Method' ],
-            [ $rest,      'Exported From Package' ]
-        );
-        for my $i ( 0 .. $#classes ) {
-            $text->row( $classes[$i], $subs[$i], $sources[$i] );
-        }
-        $report .= "Exported Subroutines\n".$text->draw;
-    }
-    return $report;
-}
-
-sub _build_report {
-    my ( $self, $title1, $title2, $strings1, $strings2 ) = @_;
-    unless ( @$strings1 == @$strings2 ) {
-        Carp::croak("PANIC:  Attempt to build unbalanced report");
-    }
-    my ( $width1, $width2 ) = $self->_get_widths( $title1, @$strings1 );
-    my $text =
-      Text::SimpleTable->new( [ $width1, $title1 ], [ $width2, $title2 ] );
-    for my $i ( 0 .. $#$strings1 ) {
-        $text->row( $strings1->[$i], $strings2->[$i] );
-    }
-    return $text->draw;
-}
-
-sub _get_widths {
-    my ( $self, $title, @strings ) = @_;
-
-    my $width = $self->width;
-    my $longest = length($title);
-    foreach my $string (@strings) {
-        my $length = length $string;
-        $longest = $length if $length > $longest;
-    }
-    $longest = int( $width / 2 ) if $longest > ($width / 2);
-    return ($longest, $width - $longest);
-}
-
-=head2 C<width>
-
- $sniff->width(80);
-
-Set the width of the report.  Defaults to 72.
-
-=cut
-
-sub width {
-    my $self = shift;
-    return $self->{width} unless @_;
-    my $number = shift;
-    unless ( $number =~ /^\d+$/ && $number >= 40 ) {
-        Carp::croak(
-            "Argument to 'width' must be a number >= than 40, not ($number)");
-    }
-    $self->{width} = $number;
-}
+=head1 INSTANCE METHODS - CODE SMELLS
 
 =head2 C<overridden>
 
@@ -421,6 +222,10 @@ classes is in Perl's default inheritance search order.
 Overridden methods are not necessarily a code smell, but you should check them
 to find out if you've overridden something you didn't expect to override.
 Accidental overriding of a method can be very hard to debug.
+
+This can also be a sign of bad responsibilities.  If you have a long
+inheritance chain and you override a method in five different levels with five
+different behaviors, perhaps this behavior should be in its own class.
 
 =cut
 
@@ -651,6 +456,236 @@ sub duplicate_methods {
     return @duplicates;
 }
 
+=head2 C<parents>
+
+ # defaults to 'target_class'
+ my $num_parents = $sniff->parents;
+ my @parents     = $sniff->parents;
+
+ my $num_parents = $sniff->parents('Some::Class');
+ my @parents     = $sniff->parents('Some::Class');
+
+In scalar context, lists the number of parents a class has.
+
+In list context, lists the parents a class has.
+
+=head3 Code Smell:  multiple parens (multiple inheritance)
+
+If a class has more than one parent, you may have unreachable or conflicting
+methods.
+
+=cut
+
+sub parents {
+    my ( $self, $class ) = @_;
+    $class ||= $self->target_class;
+    unless ( exists $self->{classes}{$class} ) {
+        Carp::croak("No such class '$class' found in hierarchy");
+    }
+    return @{ $self->{classes}{$class}{parents} };
+}
+
+=head1 INSTANCE METHODS - REPORTING
+
+=head2 C<report>
+
+ print $sniff->report;
+
+Prints out a detailed, human readable report of C<Class::Sniff>'s analysis of
+the class.  Returns an empty string if no issues found.  Sample:
+
+ Report for class: Grandchild
+ 
+ Overridden Methods
+ .--------+--------------------------------------------------------------------.
+ | Method | Class                                                              |
+ +--------+--------------------------------------------------------------------+
+ | bar    | Grandchild                                                         |
+ |        | Abstract                                                           |
+ |        | Child2                                                             |
+ | foo    | Grandchild                                                         |
+ |        | Child1                                                             |
+ |        | Abstract                                                           |
+ |        | Child2                                                             |
+ '--------+--------------------------------------------------------------------'
+ Unreachable Methods
+ .--------+--------------------------------------------------------------------.
+ | Method | Class                                                              |
+ +--------+--------------------------------------------------------------------+
+ | bar    | Child2                                                             |
+ | foo    | Child2                                                             |
+ '--------+--------------------------------------------------------------------'
+ Multiple Inheritance
+ .------------+----------------------------------------------------------------.
+ | Class      | Parents                                                        |
+ +------------+----------------------------------------------------------------+
+ | Grandchild | Child1                                                         |
+ |            | Child2                                                         |
+ '------------+----------------------------------------------------------------'
+
+=cut
+
+sub report {
+    my $self = shift;
+
+    my $report = $self->_get_overridden_report;
+    $report .= $self->_get_unreachable_report;
+    $report .= $self->_get_multiple_inheritance_report;
+    $report .= $self->_get_exported_report;
+    $report .= $self->_get_duplicate_method_report;
+
+    if ($report) {
+        my $target = $self->target_class;
+        $report = "Report for class: $target\n\n$report";
+    }
+    return $report;
+}
+
+sub _get_duplicate_method_report {
+    my $self = shift;
+
+    my $report = '';
+    my @duplicate = $self->duplicate_methods;
+    my (@methods, @duplicates);
+    if ( @duplicate ) {
+        foreach my $duplicate (@duplicate) {
+            push @methods => join '::' => @{ pop @$duplicate };
+            push @duplicates => join "\n" => map { join '::' => @$_ } @$duplicate;
+        }
+        $report .= "Duplicate Methods (Experimental)\n"
+          . $self->_build_report( 'Method', 'Duplicated In', \@methods,
+          \@duplicates );
+    }
+    return $report;
+}
+
+sub _get_overridden_report {
+    my $self = shift;
+
+    my $report = '';
+    my $overridden = $self->overridden;
+    if ( %$overridden ) {
+        my @methods = sort keys %$overridden;
+        my @classes;
+        foreach my $method (@methods) {
+            push @classes => join "\n" => @{ $overridden->{$method} };
+        }
+        $report .= "Overridden Methods\n"
+          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
+    }
+    return $report;
+}
+
+sub _get_unreachable_report {
+    my $self = shift;
+
+    my $report = '';
+    if ( my @unreachable = $self->unreachable ) {
+        my ( @methods, @classes );
+        for my $fq_method (@unreachable) {
+            $fq_method =~ /^(.*)::(.*)$/;    # time to rethink the API
+            push @methods => $2;
+            push @classes => $1;
+        }
+        $report .= "Unreachable Methods\n"
+          . $self->_build_report( 'Method', 'Class', \@methods, \@classes );
+    }
+    return $report;
+}
+
+sub _get_multiple_inheritance_report {
+    my $self = shift;
+    my $report .= '';
+    if ( my @multis = $self->multiple_inheritance ) {
+        my @classes = map { join "\n" => $self->parents($_) } @multis;
+        $report .= "Multiple Inheritance\n"
+          . $self->_build_report( 'Class', 'Parents', \@multis, \@classes );
+    }
+    return $report;
+}
+
+sub _get_exported_report {
+    my $self = shift;
+    my $exported = $self->exported;
+    my $report = '';
+    if ( my @classes = sort keys %$exported ) {
+        my ($longest_c, $longest_m) = (length('Class'), length('Method') );
+        my (@subs,@sources);
+        foreach my $class (@classes) {
+            my (@temp_subs, @temp_sources);
+            foreach my $sub (sort keys %{ $exported->{$class} } ) {
+                push @temp_subs => $sub;
+                push @temp_sources => $exported->{$class}{$sub};
+                $longest_c = length($class) if length($class) > $longest_c;
+                $longest_m = length($sub)   if length($sub) > $longest_m;
+            }
+            push @subs    => join "\n" => @temp_subs;
+            push @sources => join "\n" => @temp_sources;
+        }
+        my $width = $self->width - 3;
+        my $third = int($width/3);
+        $longest_c = $third if $longest_c > $third;
+        $longest_m = $third if $longest_m > $third;
+        my $rest = $width - ($longest_c + $longest_m);
+        my $text = Text::SimpleTable->new(
+            [ $longest_c, 'Class' ],
+            [ $longest_m, 'Method' ],
+            [ $rest,      'Exported From Package' ]
+        );
+        for my $i ( 0 .. $#classes ) {
+            $text->row( $classes[$i], $subs[$i], $sources[$i] );
+        }
+        $report .= "Exported Subroutines\n".$text->draw;
+    }
+    return $report;
+}
+
+sub _build_report {
+    my ( $self, $title1, $title2, $strings1, $strings2 ) = @_;
+    unless ( @$strings1 == @$strings2 ) {
+        Carp::croak("PANIC:  Attempt to build unbalanced report");
+    }
+    my ( $width1, $width2 ) = $self->_get_widths( $title1, @$strings1 );
+    my $text =
+      Text::SimpleTable->new( [ $width1, $title1 ], [ $width2, $title2 ] );
+    for my $i ( 0 .. $#$strings1 ) {
+        $text->row( $strings1->[$i], $strings2->[$i] );
+    }
+    return $text->draw;
+}
+
+sub _get_widths {
+    my ( $self, $title, @strings ) = @_;
+
+    my $width = $self->width;
+    my $longest = length($title);
+    foreach my $string (@strings) {
+        my $length = length $string;
+        $longest = $length if $length > $longest;
+    }
+    $longest = int( $width / 2 ) if $longest > ($width / 2);
+    return ($longest, $width - $longest);
+}
+
+=head2 C<width>
+
+ $sniff->width(80);
+
+Set the width of the report.  Defaults to 72.
+
+=cut
+
+sub width {
+    my $self = shift;
+    return $self->{width} unless @_;
+    my $number = shift;
+    unless ( $number =~ /^\d+$/ && $number >= 40 ) {
+        Carp::croak(
+            "Argument to 'width' must be a number >= than 40, not ($number)");
+    }
+    $self->{width} = $number;
+}
+
 sub _add_relationships {
     my ( $self, $class, @parents ) = @_;
     $self->_add_class($_) foreach $class, @parents;
@@ -761,35 +796,6 @@ In list context, lists the classes in the hierarchy, in default search order.
 =cut
 
 sub classes { @{ $_[0]->{list_classes} } }
-
-=head2 C<parents>
-
- # defaults to 'target_class'
- my $num_parents = $sniff->parents;
- my @parents     = $sniff->parents;
-
- my $num_parents = $sniff->parents('Some::Class');
- my @parents     = $sniff->parents('Some::Class');
-
-In scalar context, lists the number of parents a class has.
-
-In list context, lists the parents a class has.
-
-=head3 Code Smell:  multiple parens (multiple inheritance)
-
-If a class has more than one parent, you may have unreachable or conflicting
-methods.
-
-=cut
-
-sub parents {
-    my ( $self, $class ) = @_;
-    $class ||= $self->target_class;
-    unless ( exists $self->{classes}{$class} ) {
-        Carp::croak("No such class '$class' found in hierarchy");
-    }
-    return @{ $self->{classes}{$class}{parents} };
-}
 
 =head2 C<children>
 
