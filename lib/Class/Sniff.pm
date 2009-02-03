@@ -289,15 +289,26 @@ it directly.
 sub unreachable {
     my $self       = shift;
     my $overridden = $self->overridden;
-    my @unreachable;
+    my @paths      = $self->paths;
 
+    # If we only have one path through our code, we don't have any unreachable
+    # methods.
+    return if @paths == 1;
+
+    # Algorithm:  If we have overridden methods, then if we have multiple
+    # paths through the code, a method is unreachable if a *previous* path
+    # contains the method because Perl's default search order won't get to
+    # successive paths.
+    my @unreachable;
     while ( my ( $method, $classes ) = each %$overridden ) {
         my @classes;
 
       CLASS:
         for my $class (@$classes) {
             my $method_found = 0;
-            for my $path ($self->paths) {
+            for my $path (@paths) {
+
+                # method was found in a *previous* path.
                 if ($method_found) {
                     push @unreachable => "$class\::$method";
                     next CLASS;
