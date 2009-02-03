@@ -19,11 +19,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 =head1 SYNOPSIS
 
@@ -685,25 +685,6 @@ sub width {
     $self->{width} = $number;
 }
 
-sub _add_relationships {
-    my ( $self, $class, @parents ) = @_;
-    $self->_add_class($_) foreach $class, @parents;
-
-    # what if this is called more than once?
-    $self->{classes}{$class}{parents} = \@parents;
-    $self->_add_child( $_, $class ) foreach @parents;
-    return $self;
-}
-
-sub _add_child {
-    my ( $self, $class, $child ) = @_;
-
-    my $children = $self->{classes}{$class}{children};
-    unless ( grep { $child eq $_ } @$children ) {
-        push @$children => $child;
-    }
-}
-
 =head2 C<to_string>
 
  print $sniff->to_string;
@@ -859,6 +840,7 @@ sub _get_parents {
     return @parents;
 }
 
+# This is the heart of where we set just about everything up.
 sub _build_tree {
     my ( $self, @nodes ) = @_;
 
@@ -893,18 +875,44 @@ sub _build_paths {
     # expensive (such as testing for valid classes or circularity), then we
     # need it.
     my $do_chg;
+    my @paths;
 
-    my @paths = map {
-        my $path = $_;
-        $path->[-1] eq $class
-          ? do {
+    foreach my $path ( $self->paths ) {
+        if ( $path->[-1] eq $class ) {
+            foreach my $parent (@parents) {
+                if ( grep { $parent eq $_ } @$path ) {
+                    my $circular = join ' -> ' => @$path, $parent;
+                    Carp::croak("Circular path found in path ($circular)");
+                }
+            }
             ++$do_chg;
-            map { [ @$path, $_ ] } @parents;
-          }
-          : $path
-    } $self->paths;
+            push @paths => map { [ @$path, $_ ] } @parents;
+        }
+        else {
+            push @paths => $path;
+        }
+    }
 
     $self->paths(@paths) if $do_chg;
+}
+
+sub _add_relationships {
+    my ( $self, $class, @parents ) = @_;
+    $self->_add_class($_) foreach $class, @parents;
+
+    # what if this is called more than once?
+    $self->{classes}{$class}{parents} = \@parents;
+    $self->_add_child( $_, $class ) foreach @parents;
+    return $self;
+}
+
+sub _add_child {
+    my ( $self, $class, $child ) = @_;
+
+    my $children = $self->{classes}{$class}{children};
+    unless ( grep { $child eq $_ } @$children ) {
+        push @$children => $child;
+    }
 }
 
 =head1 CAVEATS AND PLANS
