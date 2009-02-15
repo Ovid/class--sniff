@@ -15,7 +15,6 @@ my $builder = Module::Build->new(
         'List::MoreUtils'   => 0.22,
         'Sub::Information'  => 0.10, 
         'Text::SimpleTable' => 0.05,
-        'Tree'              => 1.01,
     },
     build_requires    => {
         'Test::Most'        => 0.20,

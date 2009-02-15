@@ -8,7 +8,6 @@ WriteMakefile
           'EXE_FILES' => [],
           'VERSION_FROM' => 'lib/Class/Sniff.pm',
           'PREREQ_PM' => {
-                           'Tree' => '1.01',
                            'Text::SimpleTable' => '0.05',
                            'Devel::Symdump' => '2.08',
                            'B::Concise' => '0.66',

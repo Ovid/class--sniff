@@ -15,7 +15,6 @@ requires:
   List::MoreUtils: 0.22
   Sub::Information: 0.1
   Text::SimpleTable: 0.05
-  Tree: 1.01
 build_requires:
   Test::Most: 0.2
 provides:
