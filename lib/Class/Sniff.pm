@@ -18,11 +18,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 =head1 SYNOPSIS
 
@@ -140,6 +140,54 @@ sub new {
     } => $class;
     $self->_initialize;
     return $self;
+}
+
+=head2 C<new_from_namespace>
+
+ my @sniffs = Class::Sniff->new_from_namespace({
+     namespace => $some_root_namespace,
+     universal => 1,
+ });
+
+ # Print reports for each class
+ foreach my $sniff (@sniffs) {
+     print $sniff->report;
+ }
+
+ # Print out the full inheritance heirarchy.
+ my $sniff = pop @sniffs;
+ my $graph = $sniff->combine_graphs(@sniffs);
+
+ my $graphviz = $graph->as_graphviz();
+ open my $DOT, '|dot -Tpng -o graph.png' or die("Cannot open pipe to dot: $!");
+ print $DOT $graphviz;
+
+Given a namespace, returns a list of C<Class::Sniff> objects namespaces which
+start with the C<$namespace> string.  Requires a C<namespace> argument.
+
+All other arguments are passed to the C<Class::Sniff> constructor.
+
+=cut
+
+sub new_from_namespace {
+    my ( $class, $arg_for ) = @_;
+    my $namespace = delete $arg_for->{namespace}
+      or Carp::croak("new_from_namespace requires a 'namespace' argument");
+    my @sniffs;
+    my %seen;
+    my $new_sniff = sub {
+        my $symbol_name = shift;
+        no warnings 'numeric';
+        return if $seen{$symbol_name}++;    # prevent infinite loops
+        if ( $symbol_name =~ /^$namespace/ ) {
+            $symbol_name =~ s/::$//;
+            $arg_for->{class} = $symbol_name;
+            push @sniffs => Class::Sniff->new($arg_for);
+        }
+        return 1;
+    };
+    B::walksymtable( \%::, 'NAME', $new_sniff );
+    return @sniffs;
 }
 
 sub _initialize {

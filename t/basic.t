@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most tests => 32;
+use Test::Most 'no_plan'; #tests => 32;
 use Class::Sniff;
 
 {
@@ -34,7 +34,6 @@ use Class::Sniff;
 # Constructor with graph and ascii representations.
 
 can_ok 'Class::Sniff', 'new';
-$DB::single = 1;
 isa_ok my $sniff = Class::Sniff->new({ class => 'Grandchild'}), 'Class::Sniff',
   '... and the object it returns';
 
@@ -133,4 +132,11 @@ ok my $sniff2 = Class::Sniff->new({class => Grandchild2->new}),
 can_ok $sniff2, 'combine_graphs';
 isa_ok my $graph = $sniff2->combine_graphs($sniff),
     'Graph::Easy', '... and the object it returns';
+
+can_ok 'Class::Sniff', 'new_from_namespace';
+ok my @sniffs = Class::Sniff->new_from_namespace({namespace => 'Grand'}),
+    '... and calling it should succeed';
+is scalar(@sniffs), 2,
+  '... returning the correct number of Class::Sniff objects';
+$graph = $sniffs[0]->combine_graphs(@sniffs[1..$#sniffs]);
 explain $graph->as_ascii;

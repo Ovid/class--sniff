@@ -1,5 +1,8 @@
 Revision history for Class-Sniff
 
+0.08    15/02/2009
+        - Added 'new_from_namespace' method.
+
 0.07    15/02/2009
         - combine_graphs method added.  Now it's trivial to see inheritance
           hierarchies.
