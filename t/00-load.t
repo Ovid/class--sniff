@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 1;
+use Test::Most tests => 1, 'bail';
 
 BEGIN {
 	use_ok( 'Class::Sniff' );

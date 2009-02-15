@@ -19,11 +19,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -190,6 +190,10 @@ sub _register_class {
             $self->{exported}{$class}{$method} = $info->package;
         }
         else {
+
+            # It's OK to throw away the exception.  The B:: modules can be
+            # tricky and this is documented as experimental.
+            local $@;
             eval {
                 my $line = $info->line;
                 my $length  = B::svref_2object($coderef)->GV->LINE - $line;
