@@ -121,12 +121,10 @@ sub new {
         Carp::croak("'ignore' requires a regex");
     }
     my $self = bless {
-        class_order   => {},
         classes       => {},
         duplicates    => {},
         exported      => {},
         graph         => undef,
-        _graph        => undef,
         ignore        => $arg_for->{ignore},
         list_classes  => [$target_class],
         long_methods  => {},
@@ -163,7 +161,6 @@ sub _finalize {
     while ( my ( $method, $classes ) = each %{ $self->{methods} } ) {
         @$classes = sort { $classes{$a} <=> $classes{$b} } @$classes;
     }
-    $self->{class_order} = \%classes;
 }
 
 sub _register_class {
