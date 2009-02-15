@@ -1,6 +1,10 @@
 Revision history for Class-Sniff
 
 0.07
+        - combine_graphs method added.  Now it's trivial to see inheritance
+          hierarchies.
+        - Allow an instance of an object to be passed to the constructor, not
+          just a class name.
         - Removed the 'tree' representation. Code is much easier to read as a
           result.
 

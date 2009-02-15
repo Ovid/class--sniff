@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most tests => 29;
+use Test::Most tests => 32;
 use Class::Sniff;
 
 {
@@ -120,3 +120,17 @@ eq_or_diff [ $sniff->classes ],
   [ qw/Grandchild Child1 Abstract UNIVERSAL Child2/ ],
   '... and it should be returned when we ask for classes';
 
+{
+    package Grandchild2;
+    our @ISA = 'Child1';
+
+    sub new { return bless {} => shift }
+}
+
+ok my $sniff2 = Class::Sniff->new({class => Grandchild2->new}),
+    'Class::Sniff should access a class instance in the contructor';
+
+can_ok $sniff2, 'combine_graphs';
+isa_ok my $graph = $sniff2->combine_graphs($sniff),
+    'Graph::Easy', '... and the object it returns';
+explain $graph->as_ascii;

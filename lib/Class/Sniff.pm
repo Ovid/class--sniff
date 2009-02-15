@@ -8,7 +8,7 @@ use Carp ();
 use Devel::Symdump;
 use Digest::MD5;
 use Graph::Easy;
-use List::MoreUtils ();
+use List::MoreUtils  ();
 use Sub::Information ();
 use Text::SimpleTable;
 
@@ -86,6 +86,9 @@ The name of the class to sniff.  If the class is not loaded into memory, the
 constructor will still work, but nothing will get reported.  You must ensure
 that your class is already loaded!
 
+If you pass it an instance of a class instead, it will call 'ref' on the class
+to determine what class to use.
+
 =item * C<ignore>
 
 Optional.
@@ -115,8 +118,9 @@ for details.
 
 sub new {
     my ( $class, $arg_for ) = @_;
-    my $target_class = $arg_for->{class}
+    my $proto = $arg_for->{class}
       or Carp::croak("'class' argument not supplied to 'new'");
+    my $target_class = ref $proto || $proto;
     if ( exists $arg_for->{ignore} && 'Regexp' ne ref $arg_for->{ignore} ) {
         Carp::croak("'ignore' requires a regex");
     }
@@ -173,7 +177,7 @@ sub _register_class {
 
     foreach my $method (@methods) {
         my $coderef = $class->can($method)
-            or Carp::croak("Panic: $class->can($method) returned false!");
+          or Carp::croak("Panic: $class->can($method) returned false!");
         my $info = Sub::Information::inspect($coderef);
         if ( $info->package ne $class ) {
             $self->{exported}{$class}{$method} = $info->package;
@@ -184,8 +188,8 @@ sub _register_class {
             # tricky and this is documented as experimental.
             local $@;
             eval {
-                my $line = $info->line;
-                my $length  = B::svref_2object($coderef)->GV->LINE - $line;
+                my $line   = $info->line;
+                my $length = B::svref_2object($coderef)->GV->LINE - $line;
                 if ( $length > $self->method_length ) {
                     $self->{long_methods}{"$class\::$method"} = $length;
                 }
@@ -193,13 +197,13 @@ sub _register_class {
         }
 
         my $walker = B::Concise::compile( '-terse', $coderef );    # 1
-        B::Concise::walk_output( \my $buffer);
+        B::Concise::walk_output( \my $buffer );
         $walker->();    # 1 renders -terse
-        $buffer =~ s/^.*//;   # strip method name
-        $buffer =~ s/\(0x[^)]+\)/(0xHEXNUMBER)/g;   # normalize addresses
+        $buffer =~ s/^.*//;                          # strip method name
+        $buffer =~ s/\(0x[^)]+\)/(0xHEXNUMBER)/g;    # normalize addresses
         my $digest = Digest::MD5::md5_hex($buffer);
         $self->{duplicates}{$digest} ||= [];
-        push @{ $self->{duplicates}{$digest} } => [$class, $method];
+        push @{ $self->{duplicates}{$digest} } => [ $class, $method ];
     }
 
     for my $method (@methods) {
@@ -457,8 +461,8 @@ removed.  You may feel OK with this if the duplicated methods are exported
 sub duplicate_methods {
     my $self = shift;
     my @duplicates;
-    foreach my $methods ( values%{ $self->{duplicates} } ) {
-        if (@$methods > 1) {
+    foreach my $methods ( values %{ $self->{duplicates} } ) {
+        if ( @$methods > 1 ) {
             push @duplicates => $methods;
         }
     }
@@ -612,17 +616,18 @@ sub report {
 sub _get_duplicate_method_report {
     my $self = shift;
 
-    my $report = '';
+    my $report    = '';
     my @duplicate = $self->duplicate_methods;
-    my (@methods, @duplicates);
-    if ( @duplicate ) {
+    my ( @methods, @duplicates );
+    if (@duplicate) {
         foreach my $duplicate (@duplicate) {
             push @methods => join '::' => @{ pop @$duplicate };
-            push @duplicates => join "\n" => map { join '::' => @$_ } @$duplicate;
+            push @duplicates => join "\n" => map { join '::' => @$_ }
+              @$duplicate;
         }
         $report .= "Duplicate Methods (Experimental)\n"
-          . $self->_build_report( 'Method', 'Duplicated In', \@methods,
-          \@duplicates );
+          . $self->_build_report( 'Method', 'Duplicated In',
+            \@methods, \@duplicates );
     }
     return $report;
 }
@@ -630,9 +635,9 @@ sub _get_duplicate_method_report {
 sub _get_overridden_report {
     my $self = shift;
 
-    my $report = '';
+    my $report     = '';
     my $overridden = $self->overridden;
-    if ( %$overridden ) {
+    if (%$overridden) {
         my @methods = sort keys %$overridden;
         my @classes;
         foreach my $method (@methods) {
@@ -673,16 +678,16 @@ sub _get_multiple_inheritance_report {
 }
 
 sub _get_exported_report {
-    my $self = shift;
+    my $self     = shift;
     my $exported = $self->exported;
-    my $report = '';
+    my $report   = '';
     if ( my @classes = sort keys %$exported ) {
-        my ($longest_c, $longest_m) = (length('Class'), length('Method') );
-        my (@subs,@sources);
+        my ( $longest_c, $longest_m ) = ( length('Class'), length('Method') );
+        my ( @subs, @sources );
         foreach my $class (@classes) {
-            my (@temp_subs, @temp_sources);
-            foreach my $sub (sort keys %{ $exported->{$class} } ) {
-                push @temp_subs => $sub;
+            my ( @temp_subs, @temp_sources );
+            foreach my $sub ( sort keys %{ $exported->{$class} } ) {
+                push @temp_subs    => $sub;
                 push @temp_sources => $exported->{$class}{$sub};
                 $longest_c = length($class) if length($class) > $longest_c;
                 $longest_m = length($sub)   if length($sub) > $longest_m;
@@ -691,10 +696,10 @@ sub _get_exported_report {
             push @sources => join "\n" => @temp_sources;
         }
         my $width = $self->width - 3;
-        my $third = int($width/3);
+        my $third = int( $width / 3 );
         $longest_c = $third if $longest_c > $third;
         $longest_m = $third if $longest_m > $third;
-        my $rest = $width - ($longest_c + $longest_m);
+        my $rest = $width - ( $longest_c + $longest_m );
         my $text = Text::SimpleTable->new(
             [ $longest_c, 'Class' ],
             [ $longest_m, 'Method' ],
@@ -703,7 +708,7 @@ sub _get_exported_report {
         for my $i ( 0 .. $#classes ) {
             $text->row( $classes[$i], $subs[$i], $sources[$i] );
         }
-        $report .= "Exported Subroutines\n".$text->draw;
+        $report .= "Exported Subroutines\n" . $text->draw;
     }
     return $report;
 }
@@ -741,14 +746,14 @@ sub _build_report {
 sub _get_widths {
     my ( $self, $title, @strings ) = @_;
 
-    my $width = $self->width;
+    my $width   = $self->width;
     my $longest = length($title);
     foreach my $string (@strings) {
         my $length = length $string;
         $longest = $length if $length > $longest;
     }
-    $longest = int( $width / 2 ) if $longest > ($width / 2);
-    return ($longest, $width - $longest);
+    $longest = int( $width / 2 ) if $longest > ( $width / 2 );
+    return ( $longest, $width - $longest );
 }
 
 =head2 C<width>
@@ -805,6 +810,38 @@ right.
 =cut
 
 sub graph { $_[0]->{graph} }
+
+=head2 C<combine_graphs>
+
+ my $graph = $sniff->combine_graphs($sniff2, $sniff3);
+ print $graph->as_ascii;
+
+Allows you to create a large inheritance hierarchy graph by combining several
+C<Class::Sniff> instances together.
+
+Returns a L<Graph::Easy> object.
+
+=cut
+
+sub combine_graphs {
+    my ( $self, @sniffs ) = @_;
+
+    my $graph = $self->graph->copy;
+
+    foreach my $sniff (@sniffs) {
+        unless ( $sniff->isa( ref $self ) ) {
+            my $bad_class = ref $sniff;
+            my $class     = ref $self;
+            die
+"Arguments to 'combine_graphs' must '$class' objects, not '$bad_class' objects";
+        }
+        my $next_graph = $sniff->graph;
+        foreach my $edge ( $next_graph->edges ) {
+            $graph->add_edge_once( $edge->from->name, $edge->to->name );
+        }
+    }
+    return $graph;
+}
 
 =head2 C<target_class>
 
@@ -943,10 +980,10 @@ sub _build_hierarchy {
 # will take through the code to find a method.  This is based on Perl's
 # default search order, not C3.
 sub _build_paths {
-    my ( $self, $class) = @_;
+    my ( $self, $class ) = @_;
 
     my @parents = $self->_get_parents($class);
-    
+
     # XXX strictly speaking, we can skip $do_chg, but if path() get's
     # expensive (such as testing for valid classes), then we
     # need it.
@@ -977,13 +1014,14 @@ sub _add_parents {
 
     # This algorithm will follow classes in Perl's default inheritance
     # order
-    foreach my $parent ($self->_get_parents($class)) {
+    foreach my $parent ( $self->_get_parents($class) ) {
         push @{ $self->{list_classes} } => $parent
           unless grep { $_ eq $parent } @{ $self->{list_classes} };
         $self->{classes}{$parent}{count}++;
         $self->_build_hierarchy($parent);
     }
 }
+
 sub _add_children {
     my ( $self, $class ) = @_;
     my @parents = $self->_get_parents($class);
