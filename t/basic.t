@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most tests => 31;
+use Test::Most tests => 29;
 use Class::Sniff;
 
 {
@@ -31,15 +31,12 @@ use Class::Sniff;
     sub quux { }   # no inheritance
 }
 
-# Constructor with tree, graph, and ascii representations.
+# Constructor with graph and ascii representations.
 
 can_ok 'Class::Sniff', 'new';
 $DB::single = 1;
 isa_ok my $sniff = Class::Sniff->new({ class => 'Grandchild'}), 'Class::Sniff',
   '... and the object it returns';
-
-can_ok $sniff, 'tree';
-isa_ok $sniff->tree, 'Tree', '... and the object it returns';
 
 can_ok $sniff, 'graph';
 isa_ok $sniff->graph, 'Graph::Easy', '... and the object it returns';

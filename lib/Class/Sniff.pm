@@ -11,7 +11,6 @@ use Graph::Easy;
 use List::MoreUtils ();
 use Sub::Information ();
 use Text::SimpleTable;
-use Tree;
 
 =head1 NAME
 
@@ -127,13 +126,13 @@ sub new {
         duplicates    => {},
         exported      => {},
         graph         => undef,
+        _graph        => undef,
         ignore        => $arg_for->{ignore},
         list_classes  => [$target_class],
         long_methods  => {},
         methods       => {},
         paths         => [ [$target_class] ],
         target        => $target_class,
-        tree          => undef,
         universal     => $arg_for->{universal},
         method_length => ( $arg_for->{method_length} || 50 ),
     } => $class;
@@ -147,17 +146,10 @@ sub _initialize {
     $self->width(72);
     $self->_register_class($target_class);
     $self->{classes}{$target_class}{count} = 1;
-    $self->{tree} = Tree->new($target_class);
-    $self->_build_tree( $self->tree );
+    $self->{graph} = Graph::Easy->new;
+    $self->{graph}->set_attribute( 'graph', 'flow', 'up' );
+    $self->_build_hierarchy($target_class);
 
-    my $graph = Graph::Easy->new;
-    for my $node ( $self->tree->traverse ) {
-        my $class = $node->value;
-        next if $class eq $target_class;
-        $graph->add_edge_once( $node->parent->value, $class );
-    }
-    $graph->set_attribute( 'graph', 'flow', 'up' );
-    $self->{graph} = $graph;
     $self->_finalize;
 }
 
@@ -794,16 +786,6 @@ force it to respect the order in which classes are ordered.  Thus, the
 
 sub to_string { $_[0]->graph->as_ascii }
 
-=head2 C<tree>
-
- my $tree = $sniff->tree;
-
-Returns a L<Tree> representation of the inheritance hierarchy.
-
-=cut
-
-sub tree { $_[0]->{tree} }
-
 =head2 C<graph>
 
  my $graph = $sniff->graph;
@@ -933,8 +915,7 @@ sub methods {
 }
 
 sub _get_parents {
-    my ( $self, $node ) = @_;
-    my $class = $node->value;
+    my ( $self, $class ) = @_;
     return if $class eq 'UNIVERSAL';
     no strict 'refs';
 
@@ -949,17 +930,15 @@ sub _get_parents {
 }
 
 # This is the heart of where we set just about everything up.
-sub _build_tree {
-    my ( $self, @nodes ) = @_;
+sub _build_hierarchy {
+    my ( $self, @classes ) = @_;
 
-    for my $node (@nodes) {
-        return unless $self->_get_parents($node);
-        foreach my $class ( $node->value, $self->_get_parents($node) ) {
-            $self->_register_class($class);
-        }
-        $self->_add_children($node);
-        $self->_build_paths($node);
-        $self->_add_parents($node);
+    for my $class (@classes) {
+        return unless my @parents = $self->_get_parents($class);
+        $self->_register_class($_) foreach $class, @parents;
+        $self->_add_children($class);
+        $self->_build_paths($class);
+        $self->_add_parents($class);
     }
 }
 
@@ -967,10 +946,9 @@ sub _build_tree {
 # will take through the code to find a method.  This is based on Perl's
 # default search order, not C3.
 sub _build_paths {
-    my ( $self, $node) = @_;
+    my ( $self, $class) = @_;
 
-    my $class = $node->value;
-    my @parents = $self->_get_parents($node);
+    my @parents = $self->_get_parents($class);
     
     # XXX strictly speaking, we can skip $do_chg, but if path() get's
     # expensive (such as testing for valid classes), then we
@@ -998,26 +976,26 @@ sub _build_paths {
 }
 
 sub _add_parents {
-    my ( $self, $node ) = @_;
+    my ( $self, $class ) = @_;
 
     # This algorithm will follow classes in Perl's default inheritance
     # order
-    foreach my $parent ($self->_get_parents($node)) {
+    foreach my $parent ($self->_get_parents($class)) {
         push @{ $self->{list_classes} } => $parent
           unless grep { $_ eq $parent } @{ $self->{list_classes} };
         $self->{classes}{$parent}{count}++;
-        my $tree = Tree->new($parent);
-        $node->add_child($tree);
-        $self->_build_tree($tree);
+        $self->_build_hierarchy($parent);
     }
 }
 sub _add_children {
-    my ( $self, $node ) = @_;
-    my $class   = $node->value;
-    my @parents = $self->_get_parents($node);
+    my ( $self, $class ) = @_;
+    my @parents = $self->_get_parents($class);
 
     $self->{classes}{$class}{parents} = \@parents;
-    $self->_add_child( $_, $class ) foreach @parents;
+    foreach my $parent (@parents) {
+        $self->_add_child( $parent, $class );
+        $self->graph->add_edge_once( $class, $parent );
+    }
     return $self;
 }
 
