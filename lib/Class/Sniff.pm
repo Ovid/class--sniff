@@ -18,11 +18,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 =head1 SYNOPSIS
 
@@ -144,6 +144,9 @@ sub new {
 
 =head2 C<new_from_namespace>
 
+B<Warning>:  This can be a very slow method as it needs to exhaustively walk
+and analyze the symbol table.
+
  my @sniffs = Class::Sniff->new_from_namespace({
      namespace => $some_root_namespace,
      universal => 1,
@@ -165,6 +168,47 @@ sub new {
 Given a namespace, returns a list of C<Class::Sniff> objects namespaces which
 start with the C<$namespace> string.  Requires a C<namespace> argument.
 
+If you prefer, you can pass C<namespace> a regex and it will simply return a
+list of all namespaces matching that regex:
+
+ my @sniffs = Class::Sniff->new_from_namespace({
+     namespace => qr/Result(?:Set|Source)/,
+ });
+
+You can also use this to slurp "everything":
+
+ my @sniffs = Class::Sniff->new_from_namespace({
+     namespace => qr/./,
+     universal => 1,
+ });
+
+Note that because we still pull parents, it's possible that a parent class
+will have a namespace not matching what you are expecting.
+
+ use Class::Sniff;
+ use HTML::TokeParser::Simple;
+ my @sniffs = Class::Sniff->new_from_namespace({
+     namespace => qr/(?i:tag)/,
+ });
+ my $graph    = $sniffs[0]->combine_graphs( @sniffs[ 1 .. $#sniffs ] );
+ print $graph->as_ascii;
+ __END__
+ +-------------------------------------------+
+ |      HTML::TokeParser::Simple::Token      |
+ +-------------------------------------------+
+   ^
+   |
+   |
+ +-------------------------------------------+     +---------------------------------------------+
+ |   HTML::TokeParser::Simple::Token::Tag    | <-- | HTML::TokeParser::Simple::Token::Tag::Start |
+ +-------------------------------------------+     +---------------------------------------------+
+   ^
+   |
+   |
+ +-------------------------------------------+
+ | HTML::TokeParser::Simple::Token::Tag::End |
+ +-------------------------------------------+
+
 All other arguments are passed to the C<Class::Sniff> constructor.
 
 =cut
@@ -173,14 +217,28 @@ sub new_from_namespace {
     my ( $class, $arg_for ) = @_;
     my $namespace = delete $arg_for->{namespace}
       or Carp::croak("new_from_namespace requires a 'namespace' argument");
+    my $ignore = delete $arg_for->{ignore};
+
+    $namespace = ('Regexp' eq ref $namespace) 
+        ? $namespace
+        : qr/^$namespace/;
+
+    if (defined $ignore) {
+        $ignore = ('Regexp' eq ref $ignore) 
+            ? $ignore
+            : qr/^$ignore/;
+    }
+
     my @sniffs;
     my %seen;
     my $new_sniff = sub {
         my $symbol_name = shift;
         no warnings 'numeric';
         return if $seen{$symbol_name}++;    # prevent infinite loops
-        if ( $symbol_name =~ /^$namespace/ ) {
+        if ( $symbol_name =~ $namespace ) {
+            return if defined $ignore && $symbol_name =~ $ignore;
             $symbol_name =~ s/::$//;
+            return unless $class->_is_real_package($symbol_name);
             $arg_for->{class} = $symbol_name;
             push @sniffs => Class::Sniff->new($arg_for);
         }
@@ -569,7 +627,13 @@ Let me know how it works out :)
 
 =head3 Code Smell:  long methods
 
-Long methods are probably doing to much and should be broken down into smaller
+Note that long methods may not be a code smell at all.  The research in the
+topic suggests that methods longer than many experienced programmers are
+comfortable with are, nonetheless, easy to write, understand, and maintain.
+Take this with a grain of salt.  See the book "Code Complete 2" by Microsoft
+Press for more information on the research.  That being said ...
+
+Long methods might be doing to much and should be broken down into smaller
 methods.  They're harder to follow, harder to debug, and if they're doing more
 than one thing, you might find that you need that functionality elsewhere, but
 now it's tightly coupled to the long method's behavior.  As always, use your
@@ -998,7 +1062,7 @@ sub methods {
 
 sub _get_parents {
     my ( $self, $class ) = @_;
-    return if $class eq 'UNIVERSAL';
+    return if $class eq 'UNIVERSAL' or !$self->_is_real_package($class);
     no strict 'refs';
 
     my @parents = List::MoreUtils::uniq( @{"$class\::ISA"} );
@@ -1011,10 +1075,20 @@ sub _get_parents {
     return @parents;
 }
 
+sub _is_real_package {
+    my ( $proto, $class ) = @_;
+    no strict 'refs';
+    no warnings 'uninitialized';
+    $DB::single = ( $class eq 'Abstract' );
+    return 1 if 'UNIVERSAL' eq $class;
+    return
+      unless defined *{ ${"${class}::"}{ISA} }{ARRAY}
+          || scalar grep { defined *{$_}{CODE} } values %{"$class\::"};
+}
+
 # This is the heart of where we set just about everything up.
 sub _build_hierarchy {
     my ( $self, @classes ) = @_;
-
     for my $class (@classes) {
         return unless my @parents = $self->_get_parents($class);
         $self->_register_class($_) foreach $class, @parents;
@@ -1075,6 +1149,7 @@ sub _add_children {
     my @parents = $self->_get_parents($class);
 
     $self->{classes}{$class}{parents} = \@parents;
+
     foreach my $parent (@parents) {
         $self->_add_child( $parent, $class );
         $self->graph->add_edge_once( $class, $parent );

@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most 'no_plan'; #tests => 32;
+use Test::Most 'no_plan','die'; #tests => 32;
 use Class::Sniff;
 
 {
@@ -136,6 +136,14 @@ isa_ok my $graph = $sniff2->combine_graphs($sniff),
 can_ok 'Class::Sniff', 'new_from_namespace';
 ok my @sniffs = Class::Sniff->new_from_namespace({namespace => 'Grand'}),
     '... and calling it should succeed';
+is scalar(@sniffs), 2,
+  '... returning the correct number of Class::Sniff objects';
+$graph = $sniffs[0]->combine_graphs(@sniffs[1..$#sniffs]);
+explain $graph->as_ascii;
+
+can_ok 'Class::Sniff', 'new_from_namespace';
+ok @sniffs = Class::Sniff->new_from_namespace({namespace => qr/rand/}),
+    '... and calling it with a regex should succeed';
 is scalar(@sniffs), 2,
   '... returning the correct number of Class::Sniff objects';
 $graph = $sniffs[0]->combine_graphs(@sniffs[1..$#sniffs]);

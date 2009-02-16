@@ -5,6 +5,8 @@ MANIFEST
 README
 t/00-load.t
 t/basic.t
+t/code_smells.t
+t/regression.t
 xt/pod-coverage.t
 xt/pod.t
 Makefile.PL

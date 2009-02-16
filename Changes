@@ -1,5 +1,13 @@
 Revision history for Class-Sniff
 
+0.09
+        - OUCH!  Added the code smell and regression tests to the MANIFEST.
+          Would no wonder all tests are passing on the CPAN :)
+        - Clarified that "long methods" may not really be a code smell at all.
+          Doc changes don't really need to be here, but this is important
+          enough to mention it.
+        - new_from_namespace now can accept a regex, too.
+
 0.08    15/02/2009
         - Added 'new_from_namespace' method.
 
