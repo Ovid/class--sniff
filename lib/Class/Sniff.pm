@@ -18,11 +18,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.09
+Version 0.08_01
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.08_01';
 
 =head1 SYNOPSIS
 
