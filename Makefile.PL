@@ -5,9 +5,12 @@ WriteMakefile
           'PL_FILES' => {},
           'INSTALLDIRS' => 'site',
           'NAME' => 'Class::Sniff',
-          'EXE_FILES' => [],
+          'EXE_FILES' => [
+                           'bin/csniff'
+                         ],
           'VERSION_FROM' => 'lib/Class/Sniff.pm',
           'PREREQ_PM' => {
+                           'File::Find::Rule' => '0.3',
                            'Text::SimpleTable' => '0.05',
                            'Devel::Symdump' => '2.08',
                            'B::Concise' => '0.66',
