@@ -252,6 +252,11 @@ sub new_from_namespace {
             return if defined $ignore && $symbol_name =~ $ignore;
             $symbol_name =~ s/::$//;
             $arg_for->{class} = $symbol_name;
+            if ( not $class->_is_real_package($symbol_name) ) {
+                # we don't want to create a sniff, but we need to be able to
+                # descend into the namespace.
+                return 1;
+            }
             push @sniffs => Class::Sniff->new($arg_for);
         }
         return 1;
