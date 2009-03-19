@@ -1,7 +1,8 @@
 Revision history for Class-Sniff
 
 0.08_01
-        - Added experimental code to detect "fake" packages.
+        - Added experimental code to detect "fake" packages.  Ideas offered by
+          Graham Barr, but abused by me.  They're not his fault!
         - OUCH!  Added the code smell and regression tests to the MANIFEST.
           Would no wonder all tests are passing on the CPAN :)
         - Clarified that "long methods" may not really be a code smell at all.
