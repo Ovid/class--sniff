@@ -244,20 +244,19 @@ sub new_from_namespace {
 
     my @sniffs;
     my %seen;
-    my $new_sniff = sub {
+    my $find_classes = sub {
         my $symbol_name = shift;
         no warnings 'numeric';
         return if $seen{$symbol_name}++;    # prevent infinite loops
         if ( $symbol_name =~ $namespace ) {
             return if defined $ignore && $symbol_name =~ $ignore;
             $symbol_name =~ s/::$//;
-            return unless $class->_is_real_package($symbol_name);
             $arg_for->{class} = $symbol_name;
             push @sniffs => Class::Sniff->new($arg_for);
         }
         return 1;
     };
-    B::walksymtable( \%::, 'NAME', $new_sniff );
+    B::walksymtable( \%::, 'NAME', $find_classes );
     return @sniffs;
 }
 
@@ -1124,11 +1123,12 @@ sub _is_real_package {
     my ( $proto, $class ) = @_;
     no strict 'refs';
     no warnings 'uninitialized';
-    $DB::single = ( $class eq 'Abstract' );
     return 1 if 'UNIVERSAL' eq $class;
     return
-      unless defined *{ ${"${class}::"}{ISA} }{ARRAY}
+      unless eval {
+        defined *{ ${"${class}::"}{ISA} }{ARRAY}
           || scalar grep { defined *{$_}{CODE} } values %{"$class\::"};
+      };
 }
 
 # This is the heart of where we set just about everything up.

@@ -1,8 +1,10 @@
 Build.PL
 Changes
 lib/Class/Sniff.pm
+lib/Class/Sniff/App.pm
 MANIFEST
 README
+bin/csniff
 t/00-load.t
 t/basic.t
 t/code_smells.t

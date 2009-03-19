@@ -3,11 +3,69 @@
 use strict;
 use warnings;
 
-@ARGV=qw(--dir lib -v);
 use Class::Sniff::App;
 my $app = Class::Sniff::App->new(@ARGV);
 $app->run;
-use Data::Dumper::Simple;
-$Data::Dumper::Indent   = 1;
-$Data::Dumper::Sortkeys = 1;
-warn Dumper $app;
+
+__END__
+
+=head1 NAME
+
+csniff - Command line interface to C<Class::Sniff> graphs.
+
+=head1 USAGE
+
+ csniff [options] dir
+
+=head1 OPTIONS
+
+Boolean options:
+
+ -v,  --verbose     Print what classes are being loaded
+ -p,  --png         Output as png (requires 'dot' executable)
+ -g,  --gif         Output as gif (requires 'dot' executable)
+ -t,  --text        Output as text (large graphs may not render well)
+
+Options that take arguments:
+
+ -n,  --namespace   Perl regex to match desired namespaces
+ -i,  --ignore      Perl regex to exclude namespaces
+
+=head1 DESCRIPTION
+
+Given a directory, attempts to render a C<Class::Sniff> graph for all modules
+found in it.  This may be very slow.  Be patient.  Output is sent to STDOUT,
+so redirect it where you will.
+
+If no C<namespace> argument is passed, it will attempt to graph every
+namespace.  Because some of the modules C<Class::Sniff> must load are fairly
+heavyweight, you will get plenty of modules showing up in the graph which you
+didn't expect.  And it will be slow.  Did I mention that already?
+
+=head1 EXAMPLES
+
+=head2 Graph your C<DBIx::Class> resultset objects
+
+You have a bunch of C<DBIx::Class> resultset objects, but you don't want to
+see the C<DBIx::Class> hierarchy.
+
+As text graph:
+
+ csniff --namespace '^My::ResultSet' --ignore '^DBIx' \
+    lib/My/ResultSet > rs.txt
+
+As text graph with short options:
+
+ csniff -n '^My::Resultset' -i '^DBIx' lib/My/ResultSet > rx.txt
+
+As PNG:
+
+ csniff -n '^My::Resultset' -i '^DBIx' --png lib/My/ResultSet > rx.png
+
+As Gif:
+
+ csniff -n '^My::Resultset' -i '^DBIx' --gif lib/My/ResultSet > rx.gif
+
+Note that the C<--gif> and C<--png> options require that you have the
+C<dot> executable installed and in your C<PATH>.  C<dot> is part of the
+GraphViz package (L<http://www.graphviz.org/>).
