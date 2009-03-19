@@ -1,6 +1,10 @@
 Revision history for Class-Sniff
 
-0.08_01
+0.08_02
+        - Add 'clean' option to constructor to avoid tracking pseudo-packages.
+        - Added C<graph_from_namespace> as everyone seems to want this.
+
+0.08_01 unreleased
         - Added experimental code to detect "fake" packages.  Ideas offered by
           Graham Barr, but abused by me.  They're not his fault!
         - OUCH!  Added the code smell and regression tests to the MANIFEST.

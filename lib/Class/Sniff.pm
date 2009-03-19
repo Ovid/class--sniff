@@ -12,17 +12,19 @@ use List::MoreUtils  ();
 use Sub::Information ();
 use Text::SimpleTable;
 
+use constant PSEUDO_PACKAGES => qr/::(?:SUPER|ISA::CACHE)$/;
+
 =head1 NAME
 
 Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.08_01
+Version 0.08_02
 
 =cut
 
-our $VERSION = '0.08_01';
+our $VERSION = '0.08_02';
 
 =head1 SYNOPSIS
 
@@ -106,7 +108,17 @@ Optional.
 If present and true, will attempt to include the C<UNIVERSAL> base class.  If
 a class hierarchy is pruned with C<ignore>, C<UNIVERSAL> may not show up.
 
+=item * clean
+
+Optional.
+
+If present, will automatically ignore "pseudo-packages" such as those ending
+in C<::SUPER> and C<::ISA::CACHE>.  If you have legitimate packages with these
+names, oops.
+
 =item * method_length
+
+Optional.
 
 If present, will set the "maximum length" of a method before it's reported as
 a code smell.  This feature is I<highly> experimental.  See C<long_methods>
@@ -126,17 +138,18 @@ sub new {
     }
     my $self = bless {
         classes       => {},
+        clean         => $arg_for->{clean},
         duplicates    => {},
         exported      => {},
         graph         => undef,
         ignore        => $arg_for->{ignore},
         list_classes  => [$target_class],
         long_methods  => {},
+        method_length => ( $arg_for->{method_length} || 50 ),
         methods       => {},
         paths         => [ [$target_class] ],
         target        => $target_class,
         universal     => $arg_for->{universal},
-        method_length => ( $arg_for->{method_length} || 50 ),
     } => $class;
     $self->_initialize;
     return $self;
@@ -246,6 +259,29 @@ sub new_from_namespace {
     };
     B::walksymtable( \%::, 'NAME', $new_sniff );
     return @sniffs;
+}
+
+=head2 C<graph_from_namespace>
+
+    my $graph = Class::Sniff->graph_from_namespace({
+        namespace => qr/^My::Namespace/,
+    });
+    print $graph->as_ascii;
+    my $graphviz = $graph->as_graphviz();
+    open my $DOT, '|dot -Tpng -o graph.png' or die("Cannot open pipe to dot: $!");
+    print $DOT $graphviz;
+
+Like C<new_from_namespace>, but returns a single C<Graph::Easy> object.
+
+=cut
+
+sub graph_from_namespace {
+    my ( $class, $arg_for ) = @_;
+    my @sniffs = $class->new_from_namespace($arg_for);
+    my $sniff  = pop @sniffs;
+    return @sniffs
+      ? $sniff->combine_graphs(@sniffs)
+      : $sniff->graph;
 }
 
 sub _initialize {
@@ -999,6 +1035,15 @@ far in the hierarchy, the 'UNIVERSAL' class will not be added.
 
 sub universal { $_[0]->{universal} }
 
+=head2 C<clean>
+
+Returns true if user requested 'clean' classes.  This attempts to remove
+spurious packages from the inheritance tree.
+
+=cut
+
+sub clean     { $_[0]->{clean} }
+
 =head2 C<classes>
 
  my $num_classes = $sniff->classes;
@@ -1090,7 +1135,13 @@ sub _is_real_package {
 sub _build_hierarchy {
     my ( $self, @classes ) = @_;
     for my $class (@classes) {
-        return unless my @parents = $self->_get_parents($class);
+        if ( my $ignore = $self->ignore ) {
+            next if $class =~ $ignore;
+        }
+        if ( $self->clean ) {
+            next if $class =~ PSEUDO_PACKAGES;
+        }
+        next  unless my @parents = $self->_get_parents($class);
         $self->_register_class($_) foreach $class, @parents;
         $self->_add_children($class);
         $self->_build_paths($class);
