@@ -1225,7 +1225,7 @@ sub _add_child {
 
 User-defined package variables in OO code are a code smell, but with versions
 of Perl < 5.10, any subroutine also creates a scalar glob entry of the same
-name, so I've no done a package variable check yet.  This will happen in the
+name, so I've not done a package variable check yet.  This will happen in the
 future (there will be exceptions, such as with @ISA).
 
 =item * C3 Support
@@ -1241,9 +1241,11 @@ Curtis "Ovid" Poe, C<< <ovid at cpan.org> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-class-sniff at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Sniff>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
+Please report any bugs or feature requests to C<bug-class-sniff at
+rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Sniff>.  I will be
+notified, and then you'll automatically be notified of progress on your bug as
+I make changes.
 
 =head1 SUPPORT
 

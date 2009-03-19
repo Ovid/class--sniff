@@ -69,3 +69,55 @@ As Gif:
 Note that the C<--gif> and C<--png> options require that you have the
 C<dot> executable installed and in your C<PATH>.  C<dot> is part of the
 GraphViz package (L<http://www.graphviz.org/>).
+
+=head1 AUTHOR
+
+Curtis "Ovid" Poe, C<< <ovid at cpan.org> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<bug-class-sniff at
+rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Sniff>.  I will be
+notified, and then you'll automatically be notified of progress on your bug as
+I make changes.
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc Class::Sniff
+
+You can also look for information at:
+
+=over 4
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Class-Sniff>
+
+=item * AnnoCPAN: Annotated CPAN documentation
+
+L<http://annocpan.org/dist/Class-Sniff>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/d/Class-Sniff>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/Class-Sniff/>
+
+=back
+
+=head1 ACKNOWLEDGEMENTS
+
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2009 Curtis "Ovid" Poe, all rights reserved.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut
