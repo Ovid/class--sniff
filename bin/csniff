@@ -1,0 +1,13 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+@ARGV=qw(--dir lib -v);
+use Class::Sniff::App;
+my $app = Class::Sniff::App->new(@ARGV);
+$app->run;
+use Data::Dumper::Simple;
+$Data::Dumper::Indent   = 1;
+$Data::Dumper::Sortkeys = 1;
+warn Dumper $app;
