@@ -14,11 +14,11 @@ Class::Sniff::App - C<cnsiff> support class.
 
 =head1 VERSION
 
-Version 0.08_02
+Version 0.08_03
 
 =cut
 
-our $VERSION = '0.08_02';
+our $VERSION = '0.08_03';
 
 =head1 SYNOPSIS
 
@@ -49,6 +49,7 @@ sub new {
         "verbose"     => \$self->{verbose},
         "png"         => sub { $self->{output} = '_as_png' },
         "gif"         => sub { $self->{output} = '_as_gif' },
+        "I=s"         => \$self->{lib},
     );
     $self->{output} ||= '_as_txt';
 
@@ -134,7 +135,8 @@ sub _load_class {
     # untaint that puppy!
     my ($package) = $_package =~ /^([[:word:]]+(?:::[[:word:]]+)*)$/;
 
-    eval "use $package";    ## no critic
+    my $use_lib = $self->{lib} ? "use lib '$self->{lib}';" : "";
+    eval "$use_lib; use $package";    ## no critic
     warn $@ if $@;
     unless ($@) {
         $self->_say("$package loaded successfully");

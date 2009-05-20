@@ -1,5 +1,11 @@
 Revision history for Class-Sniff
 
+0.08_03 20/05/2009
+        - Add -I switch for csniff utility.
+        - Removed dependency on Sub::Information.  That has a dependency on
+          Data::Dump::Streamer and that module fails its tests for non-US
+          locales.
+
 0.08_02 19/03/2009
         - Add C<csniff> command-line utility.
         - Add 'clean' option to constructor to avoid tracking pseudo-packages.

@@ -8,8 +8,8 @@ use Carp ();
 use Devel::Symdump;
 use Digest::MD5;
 use Graph::Easy;
-use List::MoreUtils  ();
-use Sub::Information ();
+use List::MoreUtils ();
+use Sub::Identify   ();
 use Text::SimpleTable;
 
 use constant PSEUDO_PACKAGES => qr/::(?:SUPER|ISA::CACHE)$/;
@@ -20,11 +20,11 @@ Class::Sniff - Look for class composition code smells
 
 =head1 VERSION
 
-Version 0.08_02
+Version 0.08_03
 
 =cut
 
-our $VERSION = '0.08_02';
+our $VERSION = '0.08_03';
 
 =head1 SYNOPSIS
 
@@ -324,9 +324,9 @@ sub _register_class {
     foreach my $method (@methods) {
         my $coderef = $class->can($method)
           or Carp::croak("Panic: $class->can($method) returned false!");
-        my $info = Sub::Information::inspect($coderef);
-        if ( $info->package ne $class ) {
-            $self->{exported}{$class}{$method} = $info->package;
+        my $package =  Sub::Identify::stash_name($coderef);
+        if ( $package ne $class ) {
+            $self->{exported}{$class}{$method} = $package;
         }
         else {
 
@@ -334,7 +334,7 @@ sub _register_class {
             # tricky and this is documented as experimental.
             local $@;
             eval {
-                my $line   = $info->line;
+                my $line   = B::svref_2object($coderef)->START->line;
                 my $length = B::svref_2object($coderef)->GV->LINE - $line;
                 if ( $length > $self->method_length ) {
                     $self->{long_methods}{"$class\::$method"} = $length;
@@ -622,9 +622,6 @@ sub duplicate_methods {
 
 Returns methods longer than C<method_length>.  This value defaults to 50 and
 can be overridden in the constructor (but not later).
-
-Caveats:  this is experimental and depends on C<Sub::Information> 0.10 and the
-ill-documented C<B> modules.  Specifically, it relies on the following:
 
 =over 4
 

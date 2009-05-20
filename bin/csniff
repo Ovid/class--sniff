@@ -30,6 +30,7 @@ Options that take arguments:
 
  -n,  --namespace   Perl regex to match desired namespaces
  -i,  --ignore      Perl regex to exclude namespaces
+ -I,                Use this path with "use lib".        
 
 =head1 DESCRIPTION
 

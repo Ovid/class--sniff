@@ -15,7 +15,7 @@ my $builder = Module::Build->new(
         'File::Find::Rule'  => 0.30,
         'Graph::Easy'       => 0.64,
         'List::MoreUtils'   => 0.22,
-        'Sub::Information'  => 0.10,
+        'Sub::Identify'     => 0.03,
         'Text::SimpleTable' => 0.05,
     },
     build_requires     => { 'Test::Most' => 0.20, },
