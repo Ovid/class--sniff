@@ -1,5 +1,8 @@
 Revision history for Class-Sniff
 
+0.08_04 21/05/2009
+        - Remove test dependency on Sub::Information.  Oops :)
+
 0.08_03 20/05/2009
         - Add -I switch for csniff utility.
         - Removed dependency on Sub::Information.  That has a dependency on

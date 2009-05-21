@@ -1,6 +1,6 @@
 ---
 name: Class-Sniff
-version: 0.08_03
+version: 0.08_04
 author:
   - 'Curtis "Ovid" Poe <ovid@cpan.org>'
 abstract: Look for class composition code smells
@@ -21,10 +21,10 @@ build_requires:
 provides:
   Class::Sniff:
     file: lib/Class/Sniff.pm
-    version: 0.08_03
+    version: 0.08_04
   Class::Sniff::App:
     file: lib/Class/Sniff/App.pm
-    version: 0.08_03
+    version: 0.08_04
 generated_by: Module::Build version 0.32
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

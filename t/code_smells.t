@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::Most qw/no_plan die/;
+use Test::Most tests => 28;
 use Class::Sniff;
 
 {
@@ -31,7 +31,6 @@ use Class::Sniff;
     package Child1;
     our @ISA = 'Abstract';
     use Carp 'croak';
-    use Sub::Information as => 'inspect';   # exports 'inspect'
     sub foo { 1 }
 
     package Child2;
@@ -74,7 +73,7 @@ like $report, qr/Grandchild $bar Child1 $bar_newline Child2 /x,
 like $report, qr/Exported Subroutines/,
     'The report should identify exported subroutines';
 like $report,
-  qr/Child1 $bar croak $bar Carp $bar_newline inspect $bar Sub::Information/x,
+  qr/Child1 $bar croak $bar Carp $bar_newline/x,
   '... and not miss any';
 
 like $report, qr/Duplicate Methods/,
