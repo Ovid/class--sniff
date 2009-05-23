@@ -194,15 +194,21 @@ eq_or_diff [$platypus->unreachable], ['Duck::quack'],
     'Unbalanced inheritance graphs are parsed properly';
 
 # Circular inheritance really breaks things!
-{
+if ( $] < 5.010000 ) {
+    eval <<'    END';
     package Un;
     our @ISA = 'Deux';
     package Deux;
     our @ISA = 'Trois';
     package Trois;
     our @ISA = 'Un';
+    END
 }
 
-throws_ok { Class::Sniff->new({class => 'Un'}) }
-    qr/^Circular path found/,
+SKIP: {
+    skip 'Circular inheritance is now fatal in 5.10 and up', 1
+        if $] >= 5.010000;
+    throws_ok { Class::Sniff->new({class => 'Un'}) }
+        qr/^Circular path found/,
     'Circular paths should throw a fatal error';
+}

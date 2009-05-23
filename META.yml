@@ -1,12 +1,12 @@
 ---
 name: Class-Sniff
-version: 0.08_04
+version: 0.08_05
 author:
   - 'Curtis "Ovid" Poe <ovid@cpan.org>'
 abstract: Look for class composition code smells
 license: perl
 resources:
-  license: ~
+  license: http://dev.perl.org/licenses/
 requires:
   B::Concise: 0.66
   Devel::Symdump: 2.08
@@ -21,11 +21,11 @@ build_requires:
 provides:
   Class::Sniff:
     file: lib/Class/Sniff.pm
-    version: 0.08_04
+    version: 0.08_05
   Class::Sniff::App:
     file: lib/Class/Sniff/App.pm
-    version: 0.08_04
-generated_by: Module::Build version 0.32
+    version: 0.08_05
+generated_by: Module::Build version 0.33
 meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4

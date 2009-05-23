@@ -1,5 +1,9 @@
 Revision history for Class-Sniff
 
+0.08_05 23/05/2009
+        - Perl 5.010000 and greater now make circular inheritance fatal at
+          compile time, so let's skip that check for these Perl's.
+
 0.08_04 21/05/2009
         - Remove test dependency on Sub::Information.  Oops :)
 
