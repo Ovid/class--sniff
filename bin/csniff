@@ -15,7 +15,7 @@ csniff - Command line interface to C<Class::Sniff> graphs.
 
 =head1 USAGE
 
- csniff [options] dir
+ csniff [options] dir(s)
 
 =head1 OPTIONS
 
@@ -35,9 +35,9 @@ Options that take arguments:
 
 =head1 DESCRIPTION
 
-Given a directory, attempts to render a C<Class::Sniff> graph for all modules
-found in it.  This may be very slow.  Be patient.  Output is sent to STDOUT,
-so redirect it where you will.
+Given one or more directories, attempts to render a C<Class::Sniff>
+graph for all modules found in them.  This may be very slow.  Be
+patient.  Output is sent to STDOUT, so redirect it where you will.
 
 If no C<namespace> argument is passed, it will attempt to graph every
 namespace.  Because some of the modules C<Class::Sniff> must load are fairly

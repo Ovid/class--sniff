@@ -37,7 +37,7 @@ sub new {
     my ( $class, @args ) = @_;
     local @ARGV = @args;
     my $self = bless {
-        dir       => undef,
+        dirs      => undef,
         ignore    => undef,
         namespace => qr/./,
         output    => undef,
@@ -53,16 +53,16 @@ sub new {
     );
     $self->{output} ||= '_as_txt';
 
-    unless ( @ARGV && 1 == @ARGV ) {
-        die "You must supply a directory to load for Class::Sniff::App";
+    unless ( @ARGV ) {
+        die "You must supply at least one directory to load for Class::Sniff::App";
     }
 
-    $self->{dir}       = shift @ARGV;
+    $self->{dirs} = \@ARGV;
     $self->_initialize;
     return $self;
 }
 
-sub _dir       { $_[0]->{dir} }
+sub _dirs      { @{$_[0]->{dirs}} }
 sub _ignore    { $_[0]->{ignore} }
 sub _graph     { $_[0]->{graph} }
 sub _namespace { $_[0]->{namespace} }
@@ -111,21 +111,23 @@ sub _as_gif {
 
 sub _load_classes {
     my ($self) = @_;
-    my $dir = $self->_dir;
+    my @dirs = $self->_dirs;
 
-    unless ( -d $dir ) {
-        die "Cannot find ($dir) to sniff";
+    foreach my $dir (@dirs) {
+
+        unless ( -d $dir ) {
+            die "Cannot find ($dir) to sniff";
+        }
+        my @classes =
+        map { $self->_load_class($_, $dir) }
+        File::Find::Rule->file->name('*.pm')->in($dir);
+        push @{$self->{classes}}, @classes;
     }
-    my @classes =
-      map { $self->_load_class($_) }
-      File::Find::Rule->file->name('*.pm')->in($dir);
-    $self->{classes} = \@classes;
 }
 
 sub _load_class {
-    my ( $self, $file ) = @_;
+    my ( $self, $file, $dir ) = @_;
     $self->_say("Attempting to load ($file)");
-    my $dir = $self->_dir;
     $file =~ s{\.pm$}{};    # remove .pm extension
     $file =~ s{\\}{/}g;     # to make win32 happy
     $dir  =~ s{\\}{/}g;     # to make win32 happy
