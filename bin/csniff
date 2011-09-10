@@ -32,6 +32,7 @@ Options that take arguments:
  -i,  --ignore      Perl regex to exclude namespaces
  -I,                Use this path with "use lib". Can be set multiple
                     times for more than one path.
+ -o   --output      Graph format as understood by 'dot' (eg. svg, dia)
 
 =head1 DESCRIPTION
 
