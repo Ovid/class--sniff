@@ -49,7 +49,7 @@ sub new {
         "verbose"     => \$self->{verbose},
         "png"         => sub { $self->{output} = '_as_png' },
         "gif"         => sub { $self->{output} = '_as_gif' },
-        "I=s"         => \$self->{lib},
+        "I=s@"        => \$self->{lib},
     );
     $self->{output} ||= '_as_txt';
 
@@ -135,7 +135,7 @@ sub _load_class {
     # untaint that puppy!
     my ($package) = $_package =~ /^([[:word:]]+(?:::[[:word:]]+)*)$/;
 
-    my $use_lib = $self->{lib} ? "use lib '$self->{lib}';" : "";
+    my $use_lib = $self->{lib} ? "use lib qw(@{$self->{lib}});" : "";
     eval "$use_lib; use $package";    ## no critic
     warn $@ if $@;
     unless ($@) {
