@@ -37,7 +37,7 @@ sub new {
     my ( $class, @args ) = @_;
     local @ARGV = @args;
     my $self = bless {
-        dir       => undef,
+        dirs      => undef,
         ignore    => undef,
         namespace => qr/./,
         output    => undef,
@@ -47,22 +47,23 @@ sub new {
         "ignore=s"    => \$self->{ignore},
         "namespace=s" => \$self->{namespace},
         "verbose"     => \$self->{verbose},
-        "png"         => sub { $self->{output} = '_as_png' },
-        "gif"         => sub { $self->{output} = '_as_gif' },
-        "I=s"         => \$self->{lib},
+        "png"         => sub { $self->{output} = 'png' },
+        "gif"         => sub { $self->{output} = 'gif' },
+        "output=s"    => \$self->{output},
+        "I=s@"        => \$self->{lib},
     );
-    $self->{output} ||= '_as_txt';
+    $self->{output} ||= 'txt';
 
-    unless ( @ARGV && 1 == @ARGV ) {
-        die "You must supply a directory to load for Class::Sniff::App";
+    unless ( @ARGV ) {
+        die "You must supply at least one directory to load for Class::Sniff::App";
     }
 
-    $self->{dir}       = shift @ARGV;
+    $self->{dirs} = \@ARGV;
     $self->_initialize;
     return $self;
 }
 
-sub _dir       { $_[0]->{dir} }
+sub _dirs      { @{$_[0]->{dirs}} }
 sub _ignore    { $_[0]->{ignore} }
 sub _graph     { $_[0]->{graph} }
 sub _namespace { $_[0]->{namespace} }
@@ -90,42 +91,40 @@ sub run {
     );
     $self->{graph} = $graph;
     my $output = $self->_output;
-    print $self->$output;
+
+    print $output eq 'txt'
+      ? ( $self->_as_txt )
+      : ( $self->_as_dot($output) );
 }
 
 sub _as_txt { shift->_graph->as_ascii }
 
-sub _as_png {
-    my $self     = shift;
+sub _as_dot {
+    my ($self, $format) = @_;
     my $graphviz = $self->_graph->as_graphviz();
-    open my $DOT, '|dot -Tpng' or die("Cannot open pipe to dot: $!");
-    print $DOT $graphviz;
-}
-
-sub _as_gif {
-    my $self     = shift;
-    my $graphviz = $self->_graph->as_graphviz();
-    open my $DOT, '|dot -Tgif' or die("Cannot open pipe to dot: $!");
+    open my $DOT, "|dot -T$format" or die("Cannot open pipe to dot: $!");
     print $DOT $graphviz;
 }
 
 sub _load_classes {
     my ($self) = @_;
-    my $dir = $self->_dir;
+    my @dirs = $self->_dirs;
 
-    unless ( -d $dir ) {
-        die "Cannot find ($dir) to sniff";
+    foreach my $dir (@dirs) {
+
+        unless ( -d $dir ) {
+            die "Cannot find ($dir) to sniff";
+        }
+        my @classes =
+        map { $self->_load_class($_, $dir) }
+        File::Find::Rule->file->name('*.pm')->in($dir);
+        push @{$self->{classes}}, @classes;
     }
-    my @classes =
-      map { $self->_load_class($_) }
-      File::Find::Rule->file->name('*.pm')->in($dir);
-    $self->{classes} = \@classes;
 }
 
 sub _load_class {
-    my ( $self, $file ) = @_;
+    my ( $self, $file, $dir ) = @_;
     $self->_say("Attempting to load ($file)");
-    my $dir = $self->_dir;
     $file =~ s{\.pm$}{};    # remove .pm extension
     $file =~ s{\\}{/}g;     # to make win32 happy
     $dir  =~ s{\\}{/}g;     # to make win32 happy
@@ -135,7 +134,7 @@ sub _load_class {
     # untaint that puppy!
     my ($package) = $_package =~ /^([[:word:]]+(?:::[[:word:]]+)*)$/;
 
-    my $use_lib = $self->{lib} ? "use lib '$self->{lib}';" : "";
+    my $use_lib = $self->{lib} ? "use lib qw(@{$self->{lib}});" : "";
     eval "$use_lib; use $package";    ## no critic
     warn $@ if $@;
     unless ($@) {
