@@ -1,8 +1,13 @@
 Revision history for Class-Sniff
 
+0.09    11/09/2011
+        - Allow multiple paths to @INC (Bruno Vecchi)
+        - Searching for classes in more than one directory (Bruno Vecchi)
+        - Provide --output argument for csniff utility (Bruno Vecchi)
+
 0.08_05 23/05/2009
         - Perl 5.010000 and greater now make circular inheritance fatal at
-          compile time, so let's skip that check for these Perl's.
+          compile time, so let's skip that check for these Perls.
 
 0.08_04 21/05/2009
         - Remove test dependency on Sub::Information.  Oops :)
